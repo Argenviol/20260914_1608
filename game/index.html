@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>무제체스</title>
+<link rel="stylesheet" href="style.css?v=1788616766">
+</head>
+<body>
+
+<!-- ═══════════ 메인 화면 ═══════════ -->
+<div id="home">
+  <div class="homeinner">
+    <div class="homehead">
+      <h1 class="hometitle">무제체스</h1>
+      <p class="homesub">기물을 처치할 때마다 증강을 골라 체스 규칙 자체를 바꿔갑니다</p>
+    </div>
+
+    <div class="homegrid">
+      <div class="modecards">
+        <div class="modecard">
+          <div class="mtop">
+            <span class="micon">♟</span>
+            <div>
+              <div class="mtitle">AI 대전</div>
+              <div class="mdesc">컴퓨터와 한 판 둡니다</div>
+            </div>
+          </div>
+          <div class="dlabel">난이도</div>
+          <div class="difficulty" id="h-diff">
+            <button data-lv="easy"><b>초급</b><span>가볍게</span></button>
+            <button data-lv="normal" class="on"><b>중급</b><span>정석대로</span></button>
+            <button data-lv="hard"><b>고급</b><span>진심으로</span></button>
+          </div>
+          <button class="startbtn" id="h-ai">AI 대전 시작</button>
+        </div>
+
+        <div class="modecard">
+          <div class="mtop">
+            <span class="micon">♛</span>
+            <div>
+              <div class="mtitle">2인 대전</div>
+              <div class="mdesc">한 화면에서 두 사람이 번갈아 둡니다</div>
+            </div>
+          </div>
+          <div class="pvpnote">
+            비밀 증강도 서로에게 공개됩니다.<br>
+            판 뒤집기로 진영을 바꿔가며 두세요.
+          </div>
+          <button class="startbtn alt" id="h-pvp">2인 대전 시작</button>
+        </div>
+      </div>
+
+      <div class="recordcard">
+        <div class="rechead">기록</div>
+        <div id="h-records"></div>
+      </div>
+    </div>
+
+    <div class="homefoot">
+      <label class="fld">제한시간
+        <select id="h-tc">
+          <option value="none">무제한</option>
+          <option value="3+2">3분 + 2초</option>
+          <option value="5+3">5분 + 3초</option>
+          <option value="10+5" selected>10분 + 5초</option>
+          <option value="20+10">20분 + 10초</option>
+        </select>
+      </label>
+      <label class="fld vol">
+        <button class="soundbtn" id="h-sound" title="소리 켜기/끄기">🔊</button>
+        <input type="range" id="h-vol" min="0" max="100" value="75">
+      </label>
+      <div class="homelinks">
+        <button class="nav ghost" id="h-codex">증강 도감</button>
+        <button class="nav ghost" id="h-rules">규칙 · 용어</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="banners"></div>
+<div id="center"></div>
+
+<!-- ═══════════ 인게임 ═══════════ -->
+<header>
+  <h1>무제체스</h1>
+  <div class="hgroup">
+    <button id="tohome" class="nav ghost">← 메인</button>
+    <div class="difficulty small" id="g-diff">
+      <button data-lv="easy">초급</button>
+      <button data-lv="normal" class="on">중급</button>
+      <button data-lv="hard">고급</button>
+    </div>
+    <span id="tcinfo" class="tcinfo"></span>
+  </div>
+  <div class="hgroup right">
+    <label class="fld vol">
+      <button class="soundbtn" id="sound" title="소리 켜기/끄기">🔊</button>
+      <input type="range" id="vol" min="0" max="100" value="75">
+    </label>
+    <button id="flip" class="nav ghost">판 뒤집기</button>
+    <button id="codex" class="nav ghost">증강 도감</button>
+    <button id="rules" class="nav ghost">규칙 · 용어</button>
+    <button id="restart" class="nav">다시 시작</button>
+  </div>
+</header>
+
+<div id="turnbar"></div>
+
+<main>
+  <!-- 1. 체스판 -->
+  <section class="col board-col">
+    <div id="boardwrap">
+      <div id="board"></div>
+      <div id="endfx"></div>
+    </div>
+    <div id="phased"></div>
+    <div id="actions"></div>
+  </section>
+
+  <!-- 2. 내 기물색 -->
+  <section class="col side-col" id="mine"></section>
+
+  <!-- 3. 상대 기물색 -->
+  <section class="col side-col" id="theirs"></section>
+</main>
+
+<!-- 진행 기록 (판을 가리지 않는 자리에 뜬다) -->
+<aside id="logpanel">
+  <div class="logtop">
+    <b>진행 기록</b>
+    <button id="logclose" class="logx">닫기</button>
+  </div>
+  <div id="log"></div>
+</aside>
+
+<div id="dragghost"></div>
+
+<script src="src/data.js?v=1788616766"></script>
+<script src="src/sfx.js?v=1788616766"></script>
+<script src="src/engine.js?v=1788616766"></script>
+<script src="src/augments.js?v=1788616766"></script>
+<script src="src/ai.js?v=1788616766"></script>
+<script src="src/game.js?v=1788616766"></script>
+<script src="src/ui.js?v=1788616766"></script>
+</body>
+</html>

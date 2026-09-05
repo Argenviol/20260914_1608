@@ -1,0 +1,112 @@
+# -*- coding: utf-8 -*-
+"""무제체스 실행기.
+
+로컬 서버를 띄우고 브라우저를 연다.
+- 포트가 이미 쓰이고 있으면 다음 후보로 넘어간다.
+- 캐시를 끄기 때문에 파일을 고치고 새로고침하면 바로 반영된다.
+- 창을 닫거나 Ctrl+C 를 누르면 서버가 종료된다.
+
+옵션
+    --no-browser   브라우저를 열지 않는다 (점검용)
+    --port 1234    포트를 직접 지정한다
+"""
+import argparse
+import http.server
+import os
+import socket
+import socketserver
+import sys
+import threading
+import webbrowser
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(HERE, "..", "game"))
+CANDIDATE_PORTS = [8777, 8778, 8779, 8090, 8181, 0]   # 0 = 비어있는 포트 아무거나
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=ROOT, **kwargs)
+
+    def end_headers(self):
+        # 고친 파일이 곧바로 반영되도록 캐시를 끈다
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        super().end_headers()
+
+    def log_message(self, fmt, *args):
+        pass          # 콘솔을 조용히
+
+
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def pick_port(preferred=None):
+    ports = ([preferred] if preferred else []) + CANDIDATE_PORTS
+    for p in ports:
+        try:
+            s = Server(("127.0.0.1", p), Handler)
+            return s, s.server_address[1]
+        except OSError:
+            continue
+    return None, None
+
+
+def setup_console():
+    """콘솔 제목과 출력 인코딩을 한글이 깨지지 않게 맞춘다."""
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW("무제체스")
+        except Exception:
+            pass
+
+
+def main():
+    setup_console()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--port", type=int, default=None)
+    args = ap.parse_args()
+
+    index = os.path.join(ROOT, "index.html")
+    if not os.path.exists(index):
+        print(f"[오류] 게임 파일을 찾지 못했습니다: {index}")
+        return 1
+
+    httpd, port = pick_port(args.port)
+    if httpd is None:
+        print("[오류] 사용할 수 있는 포트를 찾지 못했습니다.")
+        return 1
+
+    url = f"http://localhost:{port}/index.html"
+    print()
+    print("  ┌────────────────────────────────────┐")
+    print("  │            무 제 체 스             │")
+    print("  └────────────────────────────────────┘")
+    print()
+    print(f"   주소   {url}")
+    print("   종료   이 창을 닫거나 Ctrl+C")
+    print()
+
+    if not args.no_browser:
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n   종료합니다.")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
