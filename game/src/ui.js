@@ -29,6 +29,7 @@
   let flashSquares = new Set();
   let flashTimer = null;
   let drag = null;                    // {from, ghost, moved, startX, startY}
+  let review = null;                  // 지난 국면을 보는 중이면 스냅샷 객체
   let modalDepth = 0;
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
   let lowTimeWarned = { w: false, b: false };
@@ -86,6 +87,7 @@
     const board = $('#board');
     board.innerHTML = '';
     const g = G();
+    if (review) { renderReviewBoard(board, g); return; }
     const order = [];
     for (let i = 0; i < 64; i++) order.push(i);
     if (flip) order.reverse();
@@ -134,6 +136,65 @@
     }
   }
 
+  // 지난 국면은 읽기 전용으로만 그린다 (조작·강조 없음)
+  function renderReviewBoard(board, g) {
+    const order = [];
+    for (let i = 0; i < 64; i++) order.push(i);
+    if (flip) order.reverse();
+    for (const i of order) {
+      const [r, c] = E.rc(i);
+      const sq = el('div', 'sq ' + (E.lightSquare(i) ? 'light' : 'dark'));
+      sq.dataset.i = i;
+      if (i === review.from || i === review.to) sq.classList.add('last');
+      const code = review.board[i];
+      if (code) {
+        sq.appendChild(el('div', 'pc ' + (code[1] === 'w' ? 'wp' : 'bp'), GLYPH[code[0]]));
+      }
+      if ((flip ? c === 7 : c === 0)) sq.appendChild(el('span', 'coord rank', String(8 - r)));
+      if ((flip ? r === 0 : r === 7)) sq.appendChild(el('span', 'coord file', E.FILES[c]));
+      board.appendChild(sq);
+    }
+    $('#phased').innerHTML = '';
+  }
+
+  function enterReview(idx) {
+    const g = G();
+    const snap = g.snaps[idx];
+    if (!snap) return;
+    review = snap;
+    SFX().pick();
+    render();
+    // 판 컬럼 안(턴 바 자리)에 넣는다. 화면에 띄우면 아래 진영 스트립을 가린다.
+    document.body.classList.add('reviewing');
+    let bar = $('#reviewbar');
+    if (!bar) {
+      bar = el('div', 'reviewbar'); bar.id = 'reviewbar';
+      const col = document.querySelector('.board-col');
+      col.insertBefore(bar, $('#oppstrip'));
+    }
+    bar.innerHTML = '';
+    const prev = el('button', 'skipbtn', '← 이전');
+    const next = el('button', 'skipbtn', '다음 →');
+    const info = el('span', null,
+      `${snap.moveNo}수째 · ${snap.side === 'w' ? '백' : '흑'}이 둔 뒤의 국면` +
+      ` · 처치 백${snap.kills.w}·흑${snap.kills.b}`);
+    const back = el('button', 'nav', '현재로 돌아가기');
+    prev.onclick = () => enterReview(Math.max(0, idx - 1));
+    next.onclick = () => (idx + 1 < g.snaps.length ? enterReview(idx + 1) : exitReview());
+    back.onclick = exitReview;
+    bar.appendChild(prev); bar.appendChild(info); bar.appendChild(next); bar.appendChild(back);
+    bar.classList.add('show');
+  }
+
+  function exitReview() {
+    review = null;
+    document.body.classList.remove('reviewing');
+    const bar = $('#reviewbar');
+    if (bar) bar.remove();
+    SFX().pick();
+    render();
+  }
+
   function squareAt(x, y) {
     const n = document.elementFromPoint(x, y);
     const sq = n && n.closest ? n.closest('#board .sq') : null;
@@ -143,7 +204,7 @@
   /* ───────── 클릭 + 드래그 ───────── */
   function canControl() {
     const g = G();
-    return !g.result && !Game().busy && Game().isHuman(g.turn) && !pending;
+    return !g.result && !Game().busy && Game().isHuman(g.turn) && !pending && !review;
   }
 
   function selectSquare(i) {
@@ -239,128 +300,89 @@
     else { renderBoard(); }
   }
 
-  /* ═══════════════════ 진영 패널 ═══════════════════ */
+  /* ═══════════════════ 진영 스트립 (판 위 = 상대, 판 아래 = 나) ═══════════════════ */
   function fmtClock(ms) {
     if (ms === null) return '∞';
     const s = Math.max(0, ms) / 1000;
     if (s < 10) return s.toFixed(1);
     const m = Math.floor(s / 60), r = Math.floor(s % 60);
-    return `${m}:${r < 10 ? '0' : ''}${r}`;
+    return m + ':' + (r < 10 ? '0' : '') + r;
   }
 
   function whoIs(side) {
     const gm = Game();
     if (gm.mode === 'ai') {
-      if (side === gm.aiSide) return { title: `AI · ${global.AI.LEVELS[gm.difficulty].label}`, kind: 'ai' };
+      if (side === gm.aiSide) return { title: 'AI · ' + global.AI.LEVELS[gm.difficulty].label, kind: 'ai' };
       return { title: '나', kind: 'me' };
     }
-    return { title: `${sideName(side)} 플레이어`, kind: 'human' };
+    return { title: sideName(side) + ' 플레이어', kind: 'human' };
   }
 
-  function renderSide(side, container) {
+  // 한 줄짜리 진영 바: 이름 · 처치 진행 · 증강 수 · 시계
+  function renderStrip(side, container) {
     const g = G(), gm = Game();
     container.innerHTML = '';
     const who = whoIs(side);
     const active = g.turn === side && !g.result;
 
-    const box = el('div', `sidebox ${side === 'w' ? 'sw' : 'sb'} ${active ? 'active' : ''}`);
+    const box = el('div', 'strip' + (active ? ' active' : ''));
 
-    // 머리: 이름 + 시계
-    const head = el('div', 'sidehead');
-    const nm = el('div', 'sidename');
+    const nm = el('div', 'stripname');
     nm.appendChild(el('span', 'dot ' + (side === 'w' ? 'dw' : 'db')));
-    nm.appendChild(el('b', null, `${sideName(side)} · ${who.title}`));
-    head.appendChild(nm);
-    const ck = el('div', 'clock' + (active ? ' running' : ''));
-    ck.dataset.side = side;
-    ck.textContent = fmtClock(gm.clockRemain(side));
-    head.appendChild(ck);
-    box.appendChild(head);
+    nm.appendChild(el('b', null, sideName(side)));
+    nm.appendChild(el('span', 'stripwho', who.title));
+    box.appendChild(nm);
 
-    // AI 생각 표시
-    if (who.kind === 'ai') {
-      const info = global.AI.lastInfo;
-      const line = el('div', 'ailine');
-      if (active && gm.busy !== false && g.turn === side) line.textContent = '생각 중…';
-      else if (info) {
-        line.textContent = info.book ? '정석 오프닝을 따랐습니다'
-          : info.blunder ? '(감으로 두었습니다)'
-            : `${info.depth}수 앞을 보고 두었습니다 · ${(info.nodes / 1000).toFixed(1)}k 국면 검토`;
-      } else line.textContent = global.AI.LEVELS[gm.difficulty].desc;
-      box.appendChild(line);
-    } else if (who.kind === 'human' && active) {
-      box.appendChild(el('div', 'ailine', `${sideName(side)} 플레이어가 둘 차례입니다`));
-    }
-
-    // 처치 / 다음 증강
     const thr = gm.nextThreshold(g, side);
-    const kl = el('div', 'killrow');
-    kl.appendChild(el('span', 'killn', `처치 ${g.kills[side]}`));
-    kl.appendChild(el('span', 'killsub', thr === null ? '모든 티어 획득' : `다음 증강까지 ${Math.max(0, thr - g.kills[side])}`));
-    box.appendChild(kl);
+    const prog = el('div', 'stripprog');
+    prog.appendChild(el('span', 'killn', '처치 ' + g.kills[side]));
     const bar = el('div', 'bar'), fill = el('div', 'fill');
     if (thr === null) fill.style.width = '100%';
     else {
       const prevT = g.tierIdx[side] === 0 ? 0 : Math.max(0, global.TIERS[g.tierIdx[side] - 1] - g.thrCut[side]);
-      fill.style.width = Math.max(0, Math.min(100, ((g.kills[side] - prevT) / Math.max(1, thr - prevT)) * 100)) + '%';
+      fill.style.width = Math.max(0, Math.min(100,
+        ((g.kills[side] - prevT) / Math.max(1, thr - prevT)) * 100)) + '%';
     }
-    bar.appendChild(fill); box.appendChild(bar);
-    const tiers = el('div', 'tiers');
-    global.TIERS.forEach((t, i) => {
-      const cut = Math.max(0, t - g.thrCut[side]);
-      const d = el('span', 'tier' + (i < g.tierIdx[side] ? ' done' : ''), String(cut));
-      tiers.appendChild(d);
-    });
-    box.appendChild(tiers);
+    bar.appendChild(fill);
+    prog.appendChild(bar);
+    prog.appendChild(el('span', 'killsub',
+      thr === null ? '완료' : '다음 ' + Math.max(0, thr - g.kills[side])));
+    box.appendChild(prog);
 
-    // 보유 증강
-    const hideSecret = gm.mode === 'ai' && side === gm.aiSide;
-    box.appendChild(el('h5', null, `보유 증강 ${g.augs[side].length ? `(${g.augs[side].length})` : ''}`));
-    const list = el('div', 'auglist');
-    for (const id of g.augs[side]) {
-      const a = global.AUG_BY_ID[id];
-      const hidden = a.secret && !g.revealed[id] && hideSecret;
-      const c = el('div', 'aug' + (hidden ? ' hidden' : ''));
-      if (hidden) {
-        c.innerHTML = `<span class="tag secret">비밀</span> <b>${a.piece} ${a.tier}개</b> — 발동 전까지 비공개`;
-      } else {
-        c.innerHTML = `<span class="tag t${a.tier}">${a.tier}</span><b>${a.piece}</b> <span class="augid">${id}</span>` +
-          (a.secret ? '<span class="tag secret">비밀</span>' : '') +
-          `<div class="augtext">${termHTML(a.text, a.terms)}</div>`;
-        if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
-      }
-      list.appendChild(c);
+    // 그 진영이 마지막으로 둔 수 — 누르면 판에서 그 칸이 반짝인다
+    const lm = g.lastBySide[side];
+    if (lm) {
+      const mv = el('button', 'striplast');
+      const cap = lm.victim ? ' ×' + E.KO[lm.victim] : '';
+      const pr = lm.promo ? '=' + E.KO[lm.promo] : '';
+      mv.innerHTML = '<span class="lmpiece">' + E.KO[lm.type] + '</span>' +
+        E.sqName(lm.from) + '→' + E.sqName(lm.to) + pr +
+        (cap ? '<span class="lmcap">' + cap + '</span>' : '');
+      mv.title = '이 수가 지나간 칸을 표시합니다';
+      mv.onclick = () => flash([lm.from, lm.to], null, null, true);
+      box.appendChild(mv);
+    } else {
+      box.appendChild(el('span', 'striplast none', '아직 안 둠'));
     }
-    if (!g.augs[side].length) list.appendChild(el('div', 'dim', '아직 없음'));
-    box.appendChild(list);
 
-    // 이 진영이 건 활성 효과
-    const effs = gm.activeEffects().filter(e => e.owner === side);
-    box.appendChild(el('h5', null, `활성 효과 ${effs.length ? `(${effs.length})` : ''}`));
-    const ef = el('div', 'efflist');
-    for (const e of effs) {
-      const row = el('div', 'efrow');
-      const top = el('div', 'eftop');
-      top.appendChild(el('b', null, e.label));
-      top.appendChild(el('span', 'efrem' + (e.remain <= 1 ? ' soon' : ''), `${e.remain}수 남음`));
-      row.appendChild(top);
-      if (e.detail) row.appendChild(el('div', 'efdetail', e.detail));
-      if (e.squares && e.squares.length) {
-        row.classList.add('clickable');
-        row.onclick = () => flash(e.squares, null, null, true);
-      }
-      ef.appendChild(row);
-    }
-    if (!effs.length) ef.appendChild(el('div', 'dim', '없음'));
-    box.appendChild(ef);
+    const n = g.augs[side].length;
+    const ac = el('button', 'stripaug' + (n ? '' : ' none'), '증강 ' + n);
+    ac.title = '증강 탭 열기';
+    ac.onclick = () => { setTab('aug'); SFX().pick(); };
+    box.appendChild(ac);
+
+    const ck = el('div', 'clock' + (active ? ' running' : ''));
+    ck.dataset.side = side;
+    ck.textContent = fmtClock(gm.clockRemain(side));
+    box.appendChild(ck);
 
     container.appendChild(box);
   }
 
-  function renderSides() {
+  function renderStrips() {
     const bottom = bottomSide();
-    renderSide(bottom, $('#mine'));
-    renderSide(E.other(bottom), $('#theirs'));
+    renderStrip(E.other(bottom), $('#oppstrip'));
+    renderStrip(bottom, $('#mystrip'));
   }
 
   /* ───────── 턴 바 ───────── */
@@ -368,76 +390,167 @@
     const g = G(), gm = Game();
     const t = $('#turnbar');
     t.className = '';
+    t.innerHTML = '';
+    t.appendChild(el('span', 'modetag', gm.mode === 'ai' ? 'AI 대전' : '2인 대전'));
+
     if (g.result) {
       t.classList.add('over');
-      t.textContent = (g.result.winner ? `${sideName(g.result.winner)} 승리` : '무승부') + ` — ${g.result.reason}`;
-      addLogButton(t);
+      t.appendChild(el('span', 'turntext',
+        (g.result.winner ? sideName(g.result.winner) + ' 승리' : '무승부') + ' — ' + g.result.reason));
       return;
     }
     t.classList.add(g.turn === 'w' ? 'tw' : 'tb');
     const who = whoIs(g.turn);
     let msg;
-    if (who.kind === 'ai') msg = `${sideName(g.turn)} 차례 — AI(${global.AI.LEVELS[gm.difficulty].label})가 생각하고 있습니다`;
-    else if (who.kind === 'me') msg = `${sideName(g.turn)} 차례 — 당신이 둘 차례입니다`;
-    else msg = `${sideName(g.turn)} 차례 — ${sideName(g.turn)} 플레이어가 두세요`;
-    if (E.inCheck(g, g.turn)) msg += ' · 체크!';
-    t.textContent = msg;
-    const mode = el('span', 'modetag', gm.mode === 'ai' ? 'AI 대전' : '2인 대전');
-    t.prepend(mode);
-    addLogButton(t);
+    if (who.kind === 'ai') msg = sideName(g.turn) + ' 차례 — AI가 생각하고 있습니다';
+    else if (who.kind === 'me') msg = sideName(g.turn) + ' 차례 — 당신이 둘 차례입니다';
+    else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
+    t.appendChild(el('span', 'turntext', msg));
+
+    if (E.inCheck(g, g.turn)) t.appendChild(el('span', 'checkchip', '체크!'));
+
+    const info = global.AI.lastInfo;
+    if (gm.mode === 'ai' && info && !g.result) {
+      const d = info.book ? '정석 오프닝'
+        : info.blunder ? '감으로 둠'
+          : info.depth + '수 앞 · ' + (info.nodes / 1000).toFixed(1) + 'k 검토';
+      t.appendChild(el('span', 'aichip', d));
+    }
   }
 
-  // 진행 기록은 턴 바 오른쪽 끝의 버튼으로 연다 (판을 가리지 않는 자리에 뜬다)
-  function addLogButton(t) {
-    const b = el('button', 'logbtn' + (logOpen ? ' on' : ''), '진행 기록');
-    b.id = 'logbtn';
-    b.onclick = () => { SFX().pick(); toggleLog(); };
-    t.appendChild(b);
-  }
-
-  /* ───────── 사용 가능 증강 / 기록 ───────── */
+  /* ───────── 사용 가능 증강 ───────── */
   function renderActions() {
     const g = G(), box = $('#actions');
     box.innerHTML = '';
     if (g.result || !Game().isHuman(g.turn)) return;
     const ids = Game().activatable(g.turn);
     if (!ids.length) return;
-    box.appendChild(el('div', 'seg', '지금 사용할 수 있는 증강'));
     for (const id of ids) {
       const a = global.AUG_BY_ID[id];
       const b = el('button', 'act');
-      b.innerHTML = `<b>${a.piece} ${id}</b> <span>${termHTML(a.text, a.terms)}</span>`;
+      b.innerHTML = '<b>' + a.piece + ' ' + id + ' 사용</b>' +
+        '<span>' + termHTML(a.text, a.terms) + '</span>';
       b.onclick = () => { SFX().pick(); Game().activate(id); };
       box.appendChild(b);
     }
   }
 
-  let logOpen = false;
-  function toggleLog(force) {
-    logOpen = (force === undefined) ? !logOpen : force;
-    $('#logpanel').classList.toggle('show', logOpen);
-    const b = $('#logbtn');
-    if (b) b.classList.toggle('on', logOpen);
-    if (logOpen) renderLog();
+  /* ═══════════════════ 오른쪽 탭 패널 ═══════════════════ */
+  let tab = 'aug';                    // aug | eff | log
+
+  function setTab(t) {
+    tab = t;
+    document.querySelectorAll('#tabs button').forEach(
+      b => b.classList.toggle('on', b.dataset.tab === t));
+    renderTabPanel();
   }
 
-  function renderLog() {
-    const box = $('#log');
+  function augCard(id, dimSecret) {
+    const g = G();
+    const a = global.AUG_BY_ID[id];
+    const hidden = a.secret && !g.revealed[id] && dimSecret;
+    const c = el('div', 'aug' + (hidden ? ' hidden' : ''));
+    if (hidden) {
+      c.innerHTML = '<span class="tag secret">비밀</span> <b>' + a.piece + ' ' + a.tier +
+        '개</b> — 발동 전까지 비공개';
+    } else {
+      c.innerHTML = '<span class="tag t' + a.tier + '">' + a.tier + '</span>' +
+        '<b>' + a.piece + '</b><span class="augid">' + id + '</span>' +
+        (a.secret ? '<span class="tag secret">비밀</span>' : '') +
+        '<div class="augtext">' + termHTML(a.text, a.terms) + '</div>';
+      if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
+    }
+    return c;
+  }
+
+  function renderTabPanel() {
+    const g = G(), gm = Game();
+    const box = $('#tabpanel');
     if (!box) return;
     box.innerHTML = '';
-    const items = G().log.filter(x => x.t === 'text').slice(-160);
+
+    if (tab === 'aug') {
+      const bottom = bottomSide();
+      for (const side of [bottom, E.other(bottom)]) {
+        const who = whoIs(side);
+        const head = el('div', 'panelhead');
+        head.appendChild(el('span', 'dot ' + (side === 'w' ? 'dw' : 'db')));
+        head.appendChild(el('b', null, sideName(side) + ' · ' + who.title));
+        head.appendChild(el('span', 'panelcount', String(g.augs[side].length)));
+        box.appendChild(head);
+
+        const list = el('div', 'auglist');
+        const dimSecret = gm.mode === 'ai' && side === gm.aiSide;
+        for (const id of g.augs[side]) list.appendChild(augCard(id, dimSecret));
+        if (!g.augs[side].length) list.appendChild(el('div', 'dim', '아직 없음'));
+        box.appendChild(list);
+
+        const thr = gm.nextThreshold(g, side);
+        const tiers = el('div', 'tiers');
+        global.TIERS.forEach((t, i) => {
+          const cut = Math.max(0, t - g.thrCut[side]);
+          tiers.appendChild(el('span', 'tier' + (i < g.tierIdx[side] ? ' done' : ''), String(cut)));
+        });
+        box.appendChild(tiers);
+        if (thr !== null) {
+          box.appendChild(el('div', 'panelnote',
+            '다음 증강까지 ' + Math.max(0, thr - g.kills[side]) + '처치'));
+        }
+      }
+      return;
+    }
+
+    if (tab === 'eff') {
+      const effs = gm.activeEffects();
+      if (!effs.length) { box.appendChild(el('div', 'dim', '걸려 있는 효과가 없습니다')); return; }
+      for (const e of effs) {
+        const row = el('div', 'efrow');
+        const top = el('div', 'eftop');
+        const nm = el('div', 'efname');
+        nm.appendChild(el('span', 'dot ' + (e.owner === 'w' ? 'dw' : 'db')));
+        nm.appendChild(el('b', null, e.label));
+        top.appendChild(nm);
+        top.appendChild(el('span', 'efrem' + (e.remain <= 1 ? ' soon' : ''), e.remain + '수'));
+        row.appendChild(top);
+        if (e.detail) row.appendChild(el('div', 'efdetail', e.detail));
+        if (e.squares && e.squares.length) {
+          row.classList.add('clickable');
+          row.onclick = () => flash(e.squares, null, null, true);
+        }
+        box.appendChild(row);
+      }
+      return;
+    }
+
+    // 진행 기록
+    const items = g.log.filter(x => x.t === 'text').slice(-200);
+    const wrap = el('div', 'loglist');
+    if (g.snaps.length) {
+      wrap.appendChild(el('div', 'loghint', '착수 기록을 누르면 그때 판을 볼 수 있습니다'));
+    }
     for (const x of items) {
       const line = el('div', 'line', x.text);
-      if (x.text.startsWith('⚡')) line.classList.add('aug');
-      else if (x.text.includes('처치')) line.classList.add('cap');
-      else if (x.text.includes('증강 획득')) line.classList.add('gain');
-      else if (x.text.includes('체크')) line.classList.add('chk');
-      box.appendChild(line);
+      if (x.snap !== undefined) {
+        line.classList.add('replay');
+        line.title = '이 시점의 판 보기';
+        line.onclick = () => enterReview(x.snap);
+        if (review && g.snaps[x.snap] === review) line.classList.add('viewing');
+      }
+      // '처치 카운트 1·3·6·11' 같은 안내문까지 처치로 칠하지 않도록 실제 이벤트만 고른다
+      if (x.text.indexOf('⚡') === 0) line.classList.add('aug');
+      else if (x.text.indexOf('처치 (누적') >= 0) line.classList.add('cap');
+      else if (x.text.indexOf('증강 획득') >= 0) line.classList.add('gain');
+      else if (x.text === '체크!') line.classList.add('chk');
+      wrap.appendChild(line);
     }
-    box.scrollTop = box.scrollHeight;
+    if (!items.length) wrap.appendChild(el('div', 'dim', '아직 기록이 없습니다'));
+    box.appendChild(wrap);
+    wrap.scrollTop = wrap.scrollHeight;
   }
 
-  function render() { renderBoard(); renderSides(); renderTurnbar(); renderActions(); if (logOpen) renderLog(); }
+  function renderLog() { if (tab === 'log') renderTabPanel(); }
+
+  function render() { renderBoard(); renderStrips(); renderTurnbar(); renderActions(); renderTabPanel(); }
   global.renderAll = render;
 
   /* ───────── 소리 판단 (상태 변화를 보고) ───────── */
@@ -527,7 +640,7 @@
   }
 
   // 원본 엑셀 증강표의 '한 칸' 을 그대로 펼친다: 같은 기물 · 같은 티어의 선택지 3개, 하나만 고름.
-  function draft({ side, tier, piece, offer, round, rounds, victimKo }) {
+  function draft({ side, tier, piece, offer, round, rounds, byKo }) {
     return new Promise(res => {
       SFX().draft();
       const wrap = el('div', 'draft');
@@ -537,7 +650,7 @@
       head.appendChild(h);
       const meta = el('div', 'draftmeta');
       meta.appendChild(el('span', 'dpill', `${tier}개 처치`));
-      if (victimKo) meta.appendChild(el('span', 'dpill dim2', `${victimKo} 처치로 열림`));
+      if (byKo) meta.appendChild(el('span', 'dpill dim2', `${byKo}(으)로 처치해서 열림`));
       if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `${rounds}번 중 ${round}번째`));
       head.appendChild(meta);
       wrap.appendChild(head);
@@ -945,7 +1058,10 @@
     const tc = parseTC($('#h-tc').value);
     $('#tcinfo').textContent = tc ? tc.label : '무제한';
     hideHome();
-    toggleLog(false);
+    review = null;
+    document.body.classList.remove('reviewing');
+    const rb = $('#reviewbar'); if (rb) rb.remove();
+    setTab('aug');
     SFX().unlock();
     Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc });
     // 2인 대전에서는 난이도가 의미 없다
@@ -980,7 +1096,7 @@
     $('#h-rules').onclick = openRules;
 
     // 인게임
-    $('#tohome').onclick = () => { toggleLog(false); renderHomeRecords(); showHome(); };
+    $('#tohome').onclick = () => { renderHomeRecords(); showHome(); };
     $('#restart').onclick = () => startGame(gm.mode);
     $('#flip').onclick = () => { flip = !flip; render(); };
     $('#codex').onclick = openCodex;
@@ -1027,8 +1143,32 @@
     syncSound();
     document.addEventListener('pointerdown', () => SFX().unlock(), { once: true });
 
+    // 테마 (라이트 / 다크) — 토큰 레이어만 갈아끼운다
+    const THEME_KEY = 'mujeChess.theme';
+    function applyTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      // 인게임은 아이콘 버튼(글자 없음), 메인은 글자까지
+      const icon = t === 'dark' ? '🌙' : '☀️';
+      const gb = $('#theme'); if (gb) gb.textContent = icon;
+      const hb = $('#h-theme'); if (hb) hb.textContent = icon + ' 테마';
+      try { localStorage.setItem(THEME_KEY, t); } catch (e) { }
+    }
+    let theme = 'dark';
+    try { theme = localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { }
+    applyTheme(theme);
+    const toggleTheme = () => {
+      theme = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      applyTheme(theme);
+      SFX().pick();
+    };
+    $('#theme').onclick = toggleTheme;
+    $('#h-theme').onclick = toggleTheme;
+
     // 진행 기록 패널
-    $('#logclose').onclick = () => toggleLog(false);
+    // 오른쪽 패널 탭
+    document.querySelectorAll('#tabs button').forEach(b => {
+      b.onclick = () => { setTab(b.dataset.tab); SFX().pick(); };
+    });
     renderHomeRecords();
 
     // 화면 뒤에 유효한 판을 하나 만들어 두고 메인을 띄운다 (AI 는 아직 돌지 않음)

@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무제체스</title>
-<link rel="stylesheet" href="style.css?v=1788616766">
+<link rel="stylesheet" href="wds-tokens.css?v=1788753707">
+<link rel="stylesheet" href="style.css?v=1788753707">
 </head>
 <body>
 
@@ -74,6 +75,7 @@
       <div class="homelinks">
         <button class="nav ghost" id="h-codex">증강 도감</button>
         <button class="nav ghost" id="h-rules">규칙 · 용어</button>
+        <button class="nav ghost" id="h-theme">🌙 테마</button>
       </div>
     </div>
   </div>
@@ -84,9 +86,12 @@
 
 <!-- ═══════════ 인게임 ═══════════ -->
 <header>
-  <h1>무제체스</h1>
+  <div class="brand">
+    <h1>무제체스</h1>
+    <button id="tohome" class="nav ghost small">← 메인</button>
+  </div>
+
   <div class="hgroup">
-    <button id="tohome" class="nav ghost">← 메인</button>
     <div class="difficulty small" id="g-diff">
       <button data-lv="easy">초급</button>
       <button data-lv="normal" class="on">중급</button>
@@ -94,55 +99,55 @@
     </div>
     <span id="tcinfo" class="tcinfo"></span>
   </div>
+
   <div class="hgroup right">
     <label class="fld vol">
       <button class="soundbtn" id="sound" title="소리 켜기/끄기">🔊</button>
       <input type="range" id="vol" min="0" max="100" value="75">
     </label>
-    <button id="flip" class="nav ghost">판 뒤집기</button>
-    <button id="codex" class="nav ghost">증강 도감</button>
-    <button id="rules" class="nav ghost">규칙 · 용어</button>
+    <button id="theme" class="iconbtn" title="라이트 / 다크 전환">🌙</button>
+    <button id="flip" class="iconbtn" title="판 뒤집기">⇅</button>
+    <button id="codex" class="iconbtn" title="증강 도감">📖</button>
+    <button id="rules" class="iconbtn" title="규칙 · 용어">❓</button>
     <button id="restart" class="nav">다시 시작</button>
   </div>
 </header>
 
-<div id="turnbar"></div>
-
 <main>
-  <!-- 1. 체스판 -->
+  <!-- 왼쪽: 상대 → 판 → 나 -->
   <section class="col board-col">
+    <div id="turnbar"></div>
+    <div id="oppstrip"></div>
+
     <div id="boardwrap">
       <div id="board"></div>
       <div id="endfx"></div>
     </div>
+
+    <div id="mystrip"></div>
     <div id="phased"></div>
     <div id="actions"></div>
   </section>
 
-  <!-- 2. 내 기물색 -->
-  <section class="col side-col" id="mine"></section>
-
-  <!-- 3. 상대 기물색 -->
-  <section class="col side-col" id="theirs"></section>
+  <!-- 오른쪽: 증강 / 효과 / 기록 한 패널 -->
+  <aside class="col side-col">
+    <div id="tabs">
+      <button data-tab="aug" class="on">증강</button>
+      <button data-tab="eff">활성 효과</button>
+      <button data-tab="log">진행 기록</button>
+    </div>
+    <div id="tabpanel"></div>
+  </aside>
 </main>
-
-<!-- 진행 기록 (판을 가리지 않는 자리에 뜬다) -->
-<aside id="logpanel">
-  <div class="logtop">
-    <b>진행 기록</b>
-    <button id="logclose" class="logx">닫기</button>
-  </div>
-  <div id="log"></div>
-</aside>
 
 <div id="dragghost"></div>
 
-<script src="src/data.js?v=1788616766"></script>
-<script src="src/sfx.js?v=1788616766"></script>
-<script src="src/engine.js?v=1788616766"></script>
-<script src="src/augments.js?v=1788616766"></script>
-<script src="src/ai.js?v=1788616766"></script>
-<script src="src/game.js?v=1788616766"></script>
-<script src="src/ui.js?v=1788616766"></script>
+<script src="src/data.js?v=1788753707"></script>
+<script src="src/sfx.js?v=1788753707"></script>
+<script src="src/engine.js?v=1788753707"></script>
+<script src="src/augments.js?v=1788753707"></script>
+<script src="src/ai.js?v=1788753707"></script>
+<script src="src/game.js?v=1788753707"></script>
+<script src="src/ui.js?v=1788753707"></script>
 </body>
 </html>

@@ -88,6 +88,30 @@
     if (Game.onUpdate) Game.onUpdate('log');
   }
 
+  /* ───────── 국면 스냅샷 ─────────
+     기록에서 한 줄을 누르면 그때 판을 그대로 다시 볼 수 있도록,
+     수가 끝날 때마다 판을 통째로 저장한다. 칸당 문자열 하나라 가볍다. */
+  function pushSnapshot(side, from, to) {
+    const G = Game.G;
+    const board = new Array(64);
+    for (let i = 0; i < 64; i++) {
+      const p = G.bd[i];
+      board[i] = p ? p.type + p.color : null;
+    }
+    G.snaps.push({
+      ply: G.ply, moveNo: G.moveNo, side, from, to, board,
+      kills: { w: G.kills.w, b: G.kills.b },
+      augs: { w: G.augs.w.length, b: G.augs.b.length },
+    });
+    // 방금 남긴 스냅샷을 마지막 착수 로그 줄에 연결한다
+    for (let i = G.log.length - 1; i >= 0; i--) {
+      const e = G.log[i];
+      if (e.t !== 'text') continue;
+      if (e.snap === undefined && (e.text.indexOf('→') >= 0)) { e.snap = G.snaps.length - 1; }
+      break;
+    }
+  }
+
   /* ───────── 증강 획득 ───────── */
   async function grantAug(side, id) {
     if (Game.G.augs[side].includes(id)) return;
@@ -159,7 +183,8 @@
     return firstNonEmpty;
   }
 
-  async function runDrafts(side, victimKo) {
+  // byKo = '무엇으로 잡았는가'. 원안의 "어떤 기물로 적을 죽였냐에 따라" 기준.
+  async function runDrafts(side, byKo) {
     const G = Game.G;
     let guard = 0;
     while (guard++ < 8) {
@@ -174,7 +199,7 @@
       if (G.flags[side].K1b) { rounds = 2; G.flags[side].K1b = 0; }
 
       for (let r = 0; r < rounds; r++) {
-        const cell = chooseCell(G, side, tier, victimKo);
+        const cell = chooseCell(G, side, tier, byKo);
         if (!cell || !pickableCount(cell.offer)) break;
         const isAI = Game.mode === 'ai' && side === Game.aiSide;
         let chosenId;
@@ -184,7 +209,7 @@
         } else {
           chosenId = await Game.api.draft({
             side, tier, piece: cell.ko, offer: cell.offer,
-            round: r + 1, rounds, victimKo,
+            round: r + 1, rounds, byKo,
           });
         }
         if (chosenId) await grantAug(side, chosenId);
@@ -212,6 +237,8 @@
     const side = G.turn;
     const mover = G.bd[move.from];
     const from = move.from;
+    // applyRaw 가 승격 시 type 을 바꾸므로, '무엇으로 두었는지' 를 미리 기억한다
+    const moverType = mover.type;
 
     // 처치 대상 확인
     let victim = G.bd[move.to];
@@ -227,6 +254,12 @@
     Game.lastMove = move;
     G.flags[side].Q1aReady = undefined;
     G.hist.push(E.sqName(from) + E.sqName(move.to) + (move.promo || ''));
+    G.lastBySide[side] = {
+      from, to: move.to, type: moverType,
+      promo: move.promo || null,
+      castle: move.castle || null,
+      victim: victim ? victim.type : null,
+    };
 
     // 처치 처리
     if (victim) {
@@ -277,7 +310,8 @@
       return;
     }
 
-    await runDrafts(side, victim ? E.KO[victim.type] : null);
+    // 원안 그대로 '어떤 기물로 죽였냐' 기준. 승격 전 종류를 쓴다.
+    await runDrafts(side, victim ? E.KO[moverType] : null);
     if (G.result) return;
 
     // 시계: 이번 수에 쓴 시간을 차감하고 증분을 더한다
@@ -300,6 +334,9 @@
       pushLog('포영되었던 기물이 원래 칸으로 복귀했습니다.');
       if (Game.api && Game.api.flash) Game.api.flash(returned, '포영 복귀', side);
     }
+
+    // 이 시점의 판을 기록에서 되돌려 볼 수 있도록 남긴다
+    pushSnapshot(side, from, move.to);
 
     // 상대가 둔 직후 훅 (증강 소유자 기준)
     await fire('onOppMoved', opp(side), { move });

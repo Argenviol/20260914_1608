@@ -394,12 +394,15 @@ GLOSSARY = [
 # 증강 문구 안의 용어와, 카드 아래 붙는 #태그를 같은 색으로 칠한다.
 # '처치'는 거의 모든 증강에 나와 태그로 달면 오히려 방해라 제외한다.
 TERM_STYLES = {
-    "지정불가": {"fg": "#8fb4ff", "bg": "#1e3163", "line": "#3f5da8"},
-    "제거":     {"fg": "#ff9b9b", "bg": "#5c1f1f", "line": "#a33f3f"},
-    "교환":     {"fg": "#7fdce8", "bg": "#123f47", "line": "#2f7f8c"},
-    "포영":     {"fg": "#d7a8ff", "bg": "#3a2154", "line": "#6f45a0"},
-    "변이":     {"fg": "#8fe6ad", "bg": "#17402a", "line": "#3a7d52"},
-    "비밀":     {"fg": "#f0b0e0", "bg": "#4a2043", "line": "#8f4a80"},
+    # Montage(WDS) accent 램프에서 고름. status 색(negative/positive/cautionary)은
+    # 이 UI 에서 이미 뜻을 갖기 때문에(빨강=처치·체크, 초록=대상 지정) 쓰지 않는다.
+    # 예외는 '제거' 하나 — 임의의 범주가 아니라 실제로 파괴를 뜻하므로 negative 가 맞다.
+    "지정불가": {"fg": "#4F95FF", "bg": "#0066FF1F", "line": "#0066FF52"},  # blue
+    "제거":     {"fg": "#FF6363", "bg": "#FF42421F", "line": "#FF42426E"},  # status negative
+    "교환":     {"fg": "#3BC7D4", "bg": "#00BBCC1F", "line": "#00BBCC52"},  # cyan
+    "포영":     {"fg": "#A88BFF", "bg": "#7C5CFF1F", "line": "#7C5CFF52"},  # violet
+    "변이":     {"fg": "#C98BFF", "bg": "#A34DFF1F", "line": "#A34DFF52"},  # purple
+    "비밀":     {"fg": "#FF7AC4", "bg": "#FF47AD1F", "line": "#FF47AD52"},  # pink
 }
 TERM_TAG_ORDER = ["지정불가", "포영", "제거", "교환", "변이", "비밀"]
 

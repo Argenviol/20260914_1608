@@ -55,9 +55,14 @@ def pick_port(preferred=None):
 
 
 def setup_console():
-    """콘솔 제목과 출력 인코딩을 한글이 깨지지 않게 맞춘다."""
+    """콘솔 제목과 출력 인코딩을 한글이 깨지지 않게 맞춘다.
+
+    line_buffering 이 핵심이다. 출력이 터미널이 아니면(파이프로 감싸는 실행기 등)
+    파이썬이 stdout 을 통째로 버퍼링해서, 서버는 떠 있는데 주소가 한 줄도
+    안 보여 '실행이 안 된다' 고 오해하게 된다.
+    """
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     except Exception:
         pass
     if os.name == "nt":
@@ -96,7 +101,13 @@ def main():
     print()
 
     if not args.no_browser:
-        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+        def open_browser():
+            try:
+                if not webbrowser.open(url):
+                    print("   브라우저를 자동으로 열지 못했습니다. 위 주소를 직접 열어주세요.", flush=True)
+            except Exception as e:
+                print(f"   브라우저 자동 실행 실패({e}). 위 주소를 직접 열어주세요.", flush=True)
+        threading.Timer(0.4, open_browser).start()
 
     try:
         httpd.serve_forever()

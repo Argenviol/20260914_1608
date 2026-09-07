@@ -1044,7 +1044,7 @@ window.AUGMENTS = [
 ];
 window.AUG_BY_ID = {};
 window.AUGMENTS.forEach(function(a){ window.AUG_BY_ID[a.id] = a; });
-window.TERM_STYLES = {"지정불가": {"fg": "#8fb4ff", "bg": "#1e3163", "line": "#3f5da8"}, "제거": {"fg": "#ff9b9b", "bg": "#5c1f1f", "line": "#a33f3f"}, "교환": {"fg": "#7fdce8", "bg": "#123f47", "line": "#2f7f8c"}, "포영": {"fg": "#d7a8ff", "bg": "#3a2154", "line": "#6f45a0"}, "변이": {"fg": "#8fe6ad", "bg": "#17402a", "line": "#3a7d52"}, "비밀": {"fg": "#f0b0e0", "bg": "#4a2043", "line": "#8f4a80"}};
+window.TERM_STYLES = {"지정불가": {"fg": "#4F95FF", "bg": "#0066FF1F", "line": "#0066FF52"}, "제거": {"fg": "#FF6363", "bg": "#FF42421F", "line": "#FF42426E"}, "교환": {"fg": "#3BC7D4", "bg": "#00BBCC1F", "line": "#00BBCC52"}, "포영": {"fg": "#A88BFF", "bg": "#7C5CFF1F", "line": "#7C5CFF52"}, "변이": {"fg": "#C98BFF", "bg": "#A34DFF1F", "line": "#A34DFF52"}, "비밀": {"fg": "#FF7AC4", "bg": "#FF47AD1F", "line": "#FF47AD52"}};
 window.GLOSSARY = [
  {
   "term": "지정불가",

@@ -53,6 +53,8 @@
       revealed: {},                  // 공개된 비밀 증강 id
       log: [],
       hist: [],                      // UCI 기보 (오프닝 북 조회용)
+      lastBySide: { w: null, b: null },  // 진영별 마지막 수 (스트립 표시용)
+      snaps: [],                     // 수마다의 판 스냅샷 (기록에서 되돌려 보기용)
       clock: null,                   // {w, b, inc, limit} ms. null 이면 무제한
       result: null,                  // {winner, reason}
       pendingDraft: null,
