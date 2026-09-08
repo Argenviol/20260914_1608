@@ -1,0 +1,16 @@
+# 파이썬
+__pycache__/
+*.pyc
+
+# 에디터 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code 로컬 설정 (실행에 필요 없음)
+.claude/
+
+# 원본 기획 시트는 공개하지 않는다
+docs/원본_무제체스_증강표.xlsx

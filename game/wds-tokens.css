@@ -1,0 +1,408 @@
+/* ============================================================
+   Montage (WDS) 디자인 토큰 — 자동 생성 파일
+   tools/build_tokens.py 로 생성됨. 직접 수정하지 말 것.
+
+   출처: github.com/wanteddev/montage-web
+         packages/wds-theme/src/theme/{atomic,opacity,spacing,semantic}
+
+   Montage 는 React 패키지(@wanteddev/wds)로 배포되어 컴포넌트를 그대로
+   쓸 수 없다. 그래서 **토큰 레이어만** 같은 이름으로 옮겨오고,
+   컴포넌트는 이 토큰만 써서 직접 만들었다.
+
+   - atomic 팔레트 / semantic 매핑 / spacing / opacity : 원문 그대로
+   - radius, 타이포그래피 : Montage 미공개 → 이 프로젝트에서 자체 정의
+   ============================================================ */
+
+:root {
+  /* ── spacing (원문 그대로) ── */
+  --wds-space-0: 0px;
+  --wds-space-0_5: 0.5px;
+  --wds-space-1: 1px;
+  --wds-space-2: 2px;
+  --wds-space-4: 4px;
+  --wds-space-6: 6px;
+  --wds-space-8: 8px;
+  --wds-space-10: 10px;
+  --wds-space-12: 12px;
+  --wds-space-14: 14px;
+  --wds-space-16: 16px;
+  --wds-space-20: 20px;
+  --wds-space-24: 24px;
+  --wds-space-32: 32px;
+  --wds-space-40: 40px;
+  --wds-space-48: 48px;
+  --wds-space-56: 56px;
+  --wds-space-64: 64px;
+  --wds-space-72: 72px;
+  --wds-space-80: 80px;
+
+  /* ── opacity (원문 그대로) ── */
+  --wds-opacity-0: 0;
+  --wds-opacity-5: 0.05;
+  --wds-opacity-8: 0.08;
+  --wds-opacity-12: 0.12;
+  --wds-opacity-16: 0.16;
+  --wds-opacity-22: 0.22;
+  --wds-opacity-28: 0.28;
+  --wds-opacity-35: 0.35;
+  --wds-opacity-43: 0.43;
+  --wds-opacity-52: 0.52;
+  --wds-opacity-61: 0.61;
+  --wds-opacity-74: 0.74;
+  --wds-opacity-88: 0.88;
+  --wds-opacity-97: 0.97;
+  --wds-opacity-100: 1;
+
+  /* ── atomic 팔레트 (원문 그대로) ── */
+  --wds-blue-10: #001536;
+  --wds-blue-20: #002966;
+  --wds-blue-30: #003E9C;
+  --wds-blue-40: #0054D1;
+  --wds-blue-45: #005EEB;
+  --wds-blue-50: #0066FF;
+  --wds-blue-55: #1A75FF;
+  --wds-blue-60: #3385FF;
+  --wds-blue-65: #4F95FF;
+  --wds-blue-70: #69A5FF;
+  --wds-blue-80: #9EC5FF;
+  --wds-blue-90: #C9DEFE;
+  --wds-blue-95: #EAF2FE;
+  --wds-blue-99: #F7FBFF;
+  --wds-common-0: #000000;
+  --wds-common-100: #ffffff;
+  --wds-coolNeutral-5: #0F0F10;
+  --wds-coolNeutral-7: #141415;
+  --wds-coolNeutral-10: #171719;
+  --wds-coolNeutral-15: #1B1C1E;
+  --wds-coolNeutral-17: #212225;
+  --wds-coolNeutral-20: #292A2D;
+  --wds-coolNeutral-22: #2E2F33;
+  --wds-coolNeutral-23: #333438;
+  --wds-coolNeutral-25: #37383C;
+  --wds-coolNeutral-30: #46474C;
+  --wds-coolNeutral-40: #5A5C63;
+  --wds-coolNeutral-50: #70737C;
+  --wds-coolNeutral-60: #878A93;
+  --wds-coolNeutral-70: #989BA2;
+  --wds-coolNeutral-80: #AEB0B6;
+  --wds-coolNeutral-90: #C2C4C8;
+  --wds-coolNeutral-95: #DBDCDF;
+  --wds-coolNeutral-96: #E1E2E4;
+  --wds-coolNeutral-97: #EAEBEC;
+  --wds-coolNeutral-98: #F4F4F5;
+  --wds-coolNeutral-99: #F7F7F8;
+  --wds-cyan-10: #00252B;
+  --wds-cyan-20: #004854;
+  --wds-cyan-30: #006F82;
+  --wds-cyan-40: #0098B2;
+  --wds-cyan-50: #00BDDE;
+  --wds-cyan-60: #28D0ED;
+  --wds-cyan-70: #57DFF7;
+  --wds-cyan-80: #8AEDFF;
+  --wds-cyan-90: #B5F4FF;
+  --wds-cyan-95: #DEFAFF;
+  --wds-cyan-99: #F7FEFF;
+  --wds-green-10: #00240C;
+  --wds-green-20: #004517;
+  --wds-green-30: #006E25;
+  --wds-green-40: #009632;
+  --wds-green-50: #00BF40;
+  --wds-green-60: #1ED45A;
+  --wds-green-70: #49E57D;
+  --wds-green-80: #7DF5A5;
+  --wds-green-90: #ACFCC7;
+  --wds-green-95: #D9FFE6;
+  --wds-green-99: #F2FFF6;
+  --wds-lightBlue-10: #002130;
+  --wds-lightBlue-20: #004261;
+  --wds-lightBlue-30: #006796;
+  --wds-lightBlue-40: #008DCF;
+  --wds-lightBlue-50: #00AEFF;
+  --wds-lightBlue-60: #3DC2FF;
+  --wds-lightBlue-70: #70D2FF;
+  --wds-lightBlue-80: #A1E1FF;
+  --wds-lightBlue-90: #C4ECFE;
+  --wds-lightBlue-95: #E5F6FE;
+  --wds-lightBlue-99: #F7FDFF;
+  --wds-lime-10: #112900;
+  --wds-lime-20: #225200;
+  --wds-lime-30: #347D00;
+  --wds-lime-37: #429E00;
+  --wds-lime-40: #48AD00;
+  --wds-lime-50: #58CF04;
+  --wds-lime-60: #6BE016;
+  --wds-lime-70: #88F03E;
+  --wds-lime-80: #AEF779;
+  --wds-lime-90: #CCFCA9;
+  --wds-lime-95: #E6FFD4;
+  --wds-lime-99: #F8FFF2;
+  --wds-neutral-5: #0F0F0F;
+  --wds-neutral-10: #171717;
+  --wds-neutral-15: #1C1C1C;
+  --wds-neutral-20: #2A2A2A;
+  --wds-neutral-22: #303030;
+  --wds-neutral-30: #474747;
+  --wds-neutral-40: #5C5C5C;
+  --wds-neutral-50: #737373;
+  --wds-neutral-60: #8A8A8A;
+  --wds-neutral-70: #9B9B9B;
+  --wds-neutral-80: #B0B0B0;
+  --wds-neutral-90: #C4C4C4;
+  --wds-neutral-95: #DCDCDC;
+  --wds-neutral-99: #F7F7F7;
+  --wds-orange-10: #361E00;
+  --wds-orange-20: #663A00;
+  --wds-orange-30: #9C5800;
+  --wds-orange-39: #D17600;
+  --wds-orange-40: #D47800;
+  --wds-orange-50: #FF9200;
+  --wds-orange-60: #FFA938;
+  --wds-orange-70: #FFC06E;
+  --wds-orange-80: #FFD49C;
+  --wds-orange-90: #FEE6C6;
+  --wds-orange-95: #FEF4E6;
+  --wds-orange-99: #FFFCF7;
+  --wds-pink-10: #3D0133;
+  --wds-pink-20: #730560;
+  --wds-pink-30: #A81690;
+  --wds-pink-40: #D331B8;
+  --wds-pink-46: #E846CD;
+  --wds-pink-50: #F553DA;
+  --wds-pink-60: #FA73E3;
+  --wds-pink-70: #FF94ED;
+  --wds-pink-80: #FFB8F3;
+  --wds-pink-90: #FED3F7;
+  --wds-pink-95: #FEECFB;
+  --wds-pink-99: #FFFAFE;
+  --wds-purple-10: #290247;
+  --wds-purple-20: #580A7D;
+  --wds-purple-30: #861CB8;
+  --wds-purple-40: #AD36E3;
+  --wds-purple-50: #CB59FF;
+  --wds-purple-60: #D478FF;
+  --wds-purple-70: #DE96FF;
+  --wds-purple-80: #E9BAFF;
+  --wds-purple-90: #F2D6FF;
+  --wds-purple-95: #F9EDFF;
+  --wds-purple-99: #FEFBFF;
+  --wds-red-10: #3B0101;
+  --wds-red-20: #730303;
+  --wds-red-30: #B00C0C;
+  --wds-red-40: #E52222;
+  --wds-red-50: #FF4242;
+  --wds-red-60: #FF6363;
+  --wds-red-70: #FF8C8C;
+  --wds-red-80: #FFB5B5;
+  --wds-red-90: #FED5D5;
+  --wds-red-95: #FEECEC;
+  --wds-red-99: #FFFAFA;
+  --wds-redOrange-10: #290F00;
+  --wds-redOrange-20: #592100;
+  --wds-redOrange-30: #913500;
+  --wds-redOrange-40: #C94A00;
+  --wds-redOrange-48: #F55A00;
+  --wds-redOrange-50: #FF5E00;
+  --wds-redOrange-60: #FF7B2E;
+  --wds-redOrange-70: #FF9B61;
+  --wds-redOrange-80: #FFBD96;
+  --wds-redOrange-90: #FED9C4;
+  --wds-redOrange-95: #FEEEE5;
+  --wds-redOrange-99: #FFFAF7;
+  --wds-violet-10: #11024D;
+  --wds-violet-20: #23098F;
+  --wds-violet-30: #3A16C9;
+  --wds-violet-40: #4F29E5;
+  --wds-violet-45: #5B37ED;
+  --wds-violet-50: #6541F2;
+  --wds-violet-60: #7D5EF7;
+  --wds-violet-70: #9E86FC;
+  --wds-violet-80: #C0B0FF;
+  --wds-violet-90: #DBD3FE;
+  --wds-violet-95: #F0ECFE;
+  --wds-violet-99: #FBFAFF;
+
+  /* ── radius (Montage 미공개 → 자체 정의) ── */
+  --wds-radius-2: 2px;
+  --wds-radius-4: 4px;
+  --wds-radius-6: 6px;
+  --wds-radius-8: 8px;
+  --wds-radius-10: 10px;
+  --wds-radius-12: 12px;
+  --wds-radius-16: 16px;
+  --wds-radius-20: 20px;
+  --wds-radius-full: 9999px;
+
+  /* ── 타이포그래피 (Montage 미공개 → 자체 정의) ── */
+  --wds-font: "Pretendard", "Pretendard Variable", -apple-system,
+              "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --wds-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  --wds-title1-size: 28px;   --wds-title1-height: 38px;  --wds-title1-weight: 700;
+  --wds-title2-size: 22px;   --wds-title2-height: 30px;  --wds-title2-weight: 700;
+  --wds-title3-size: 18px;   --wds-title3-height: 26px;  --wds-title3-weight: 700;
+  --wds-heading1-size: 16px; --wds-heading1-height: 24px; --wds-heading1-weight: 600;
+  --wds-heading2-size: 15px; --wds-heading2-height: 22px; --wds-heading2-weight: 600;
+  --wds-body1-size: 15px;    --wds-body1-height: 24px;   --wds-body1-weight: 400;
+  --wds-body2-size: 14px;    --wds-body2-height: 22px;   --wds-body2-weight: 400;
+  --wds-label1-size: 13px;   --wds-label1-height: 18px;  --wds-label1-weight: 500;
+  --wds-label2-size: 12px;   --wds-label2-height: 16px;  --wds-label2-weight: 500;
+  --wds-caption-size: 11px;  --wds-caption-height: 14px; --wds-caption-weight: 500;
+}
+
+/* ── semantic · 라이트 (원문 그대로) ── */
+:root, [data-theme='light'] {
+  --wds-accent-background-cyan: #00BDDE;
+  --wds-accent-background-lightBlue: #00AEFF;
+  --wds-accent-background-lime: #58CF04;
+  --wds-accent-background-pink: #F553DA;
+  --wds-accent-background-purple: #CB59FF;
+  --wds-accent-background-redOrange: #FF5E00;
+  --wds-accent-background-violet: #6541F2;
+  --wds-accent-foreground-blue: #005EEB;
+  --wds-accent-foreground-cyan: #0098B2;
+  --wds-accent-foreground-green: #009632;
+  --wds-accent-foreground-lightBlue: #008DCF;
+  --wds-accent-foreground-lime: #429E00;
+  --wds-accent-foreground-orange: #D17600;
+  --wds-accent-foreground-pink: #E846CD;
+  --wds-accent-foreground-purple: #AD36E3;
+  --wds-accent-foreground-red: #E52222;
+  --wds-accent-foreground-redOrange: #F55A00;
+  --wds-accent-foreground-violet: #5B37ED;
+  --wds-background-elevated-alternative: #F7F7F8;
+  --wds-background-elevated-normal: #ffffff;
+  --wds-background-normal-alternative: #F7F7F8;
+  --wds-background-normal-normal: #ffffff;
+  --wds-background-status-cautionary: #FF920014;
+  --wds-background-status-negative: #FF424214;
+  --wds-background-status-positive: #00BF4014;
+  --wds-background-transparent-alternative: #ffffff47;
+  --wds-background-transparent-normal: #ffffff14;
+  --wds-fill-alternative: #70737C0D;
+  --wds-fill-normal: #70737C14;
+  --wds-fill-strong: #70737C29;
+  --wds-interaction-disable: #F4F4F5;
+  --wds-interaction-inactive: #989BA2;
+  --wds-inverse-background: #1B1C1E;
+  --wds-inverse-label: #F7F7F8;
+  --wds-inverse-primary: #3385FF;
+  --wds-label-alternative: #37383C9C;
+  --wds-label-assistive: #37383C47;
+  --wds-label-disable: #37383C29;
+  --wds-label-neutral: #2E2F33E0;
+  --wds-label-normal: #171719;
+  --wds-label-strong: #000000;
+  --wds-line-normal-alternative: #70737C14;
+  --wds-line-normal-neutral: #70737C29;
+  --wds-line-normal-normal: #70737C38;
+  --wds-line-primary-normal: #0066FF47;
+  --wds-line-primary-strong: #0066FF6E;
+  --wds-line-solid-alternative: #F4F4F5;
+  --wds-line-solid-neutral: #EAEBEC;
+  --wds-line-solid-normal: #E1E2E4;
+  --wds-line-status-cautionary-normal: #FF92006E;
+  --wds-line-status-negative-normal: #FF42426E;
+  --wds-line-status-negative-strong: #FF424285;
+  --wds-line-status-positive-normal: #00BF406E;
+  --wds-material-dimmer: #17171985;
+  --wds-primary-heavy: #0054D1;
+  --wds-primary-normal: #0066FF;
+  --wds-primary-strong: #005EEB;
+  --wds-static-black: #000000;
+  --wds-static-white: #ffffff;
+  --wds-status-cautionary: #FF9200;
+  --wds-status-negative: #FF4242;
+  --wds-status-positive: #00BF40;
+}
+
+/* ── semantic · 다크 (원문 그대로) ── */
+[data-theme='dark'] {
+  --wds-accent-background-cyan: #28D0ED;
+  --wds-accent-background-lightBlue: #3DC2FF;
+  --wds-accent-background-lime: #6BE016;
+  --wds-accent-background-pink: #FA73E3;
+  --wds-accent-background-purple: #D478FF;
+  --wds-accent-background-redOrange: #FF7B2E;
+  --wds-accent-background-violet: #7D5EF7;
+  --wds-accent-foreground-blue: #4F95FF;
+  --wds-accent-foreground-cyan: #00BDDE;
+  --wds-accent-foreground-green: #1ED45A;
+  --wds-accent-foreground-lightBlue: #00AEFF;
+  --wds-accent-foreground-lime: #58CF04;
+  --wds-accent-foreground-orange: #FF9200;
+  --wds-accent-foreground-pink: #FA73E3;
+  --wds-accent-foreground-purple: #D478FF;
+  --wds-accent-foreground-red: #FF6363;
+  --wds-accent-foreground-redOrange: #FF7B2E;
+  --wds-accent-foreground-violet: #9E86FC;
+  --wds-background-elevated-alternative: #141415;
+  --wds-background-elevated-normal: #212225;
+  --wds-background-normal-alternative: #0F0F10;
+  --wds-background-normal-normal: #1B1C1E;
+  --wds-background-status-cautionary: #FFA93814;
+  --wds-background-status-negative: #FF636314;
+  --wds-background-status-positive: #1ED45A14;
+  --wds-background-transparent-alternative: #2122259C;
+  --wds-background-transparent-normal: #2122259C;
+  --wds-fill-alternative: #70737C1F;
+  --wds-fill-normal: #70737C38;
+  --wds-fill-strong: #70737C47;
+  --wds-interaction-disable: #2E2F33;
+  --wds-interaction-inactive: #5A5C63;
+  --wds-inverse-background: #ffffff;
+  --wds-inverse-label: #171719;
+  --wds-inverse-primary: #0066FF;
+  --wds-label-alternative: #AEB0B69C;
+  --wds-label-assistive: #AEB0B647;
+  --wds-label-disable: #989BA229;
+  --wds-label-neutral: #C2C4C8E0;
+  --wds-label-normal: #F7F7F8;
+  --wds-label-strong: #ffffff;
+  --wds-line-normal-alternative: #70737C38;
+  --wds-line-normal-neutral: #70737C47;
+  --wds-line-normal-normal: #70737C52;
+  --wds-line-primary-normal: #3385FF47;
+  --wds-line-primary-strong: #3385FF6E;
+  --wds-line-solid-alternative: #2E2F33;
+  --wds-line-solid-neutral: #333438;
+  --wds-line-solid-normal: #37383C;
+  --wds-line-status-cautionary-normal: #FFA9386E;
+  --wds-line-status-negative-normal: #FF63636E;
+  --wds-line-status-negative-strong: #FF636385;
+  --wds-line-status-positive-normal: #1ED45A6E;
+  --wds-material-dimmer: #171719BD;
+  --wds-primary-heavy: #0066FF;
+  --wds-primary-normal: #3385FF;
+  --wds-primary-strong: #1A75FF;
+  --wds-static-black: #000000;
+  --wds-static-white: #ffffff;
+  --wds-status-cautionary: #FFA938;
+  --wds-status-negative: #FF6363;
+  --wds-status-positive: #1ED45A;
+}
+
+/* ── elevation (원문 그대로) ── */
+:root {
+  --wds-shadow-xsmall: 0px 1px 2px -1px #17171919;
+  --wds-shadow-small: 0px 2px 4px -2px #1717190F, 0px 4px 6px -1px #1717190F;
+  --wds-shadow-medium: 0px 4px 6px -2px #17171912, 0px 10px 15px -3px #17171912;
+  --wds-shadow-large: 0px 6px 10px -4px #17171914, 0px 16px 24px -6px #17171914;
+  --wds-shadow-xlarge: 0px 10px 15px -5px #17171919, 0px 24px 38px -10px #1717191F;
+}
+
+/* ============================================================
+   차트 · 범주형 색상 램프
+
+   status 색(빨강 negative / 초록 positive / 주황 cautionary)은
+   이 램프에 넣지 않는다. 이 UI 에서 빨강과 초록은 이미 뜻을 갖기
+   때문에(빨강=처치·체크·잠김, 초록=대상 지정), 평범한 범주 항목이
+   그 색으로 칠해지면 경고나 성공으로 오독된다.
+   ============================================================ */
+:root {
+  --wds-cat-1: var(--wds-accent-foreground-blue);
+  --wds-cat-2: var(--wds-accent-foreground-violet);
+  --wds-cat-3: var(--wds-accent-foreground-cyan);
+  --wds-cat-4: var(--wds-accent-foreground-purple);
+  --wds-cat-5: var(--wds-accent-foreground-lightBlue);
+  --wds-cat-6: var(--wds-accent-foreground-pink);
+}
