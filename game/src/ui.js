@@ -30,6 +30,8 @@
   let flashTimer = null;
   let drag = null;                    // {from, ghost, moved, startX, startY}
   let review = null;                  // 지난 국면을 보는 중이면 스냅샷 객체
+  let pathHint = null;                // {steps:[], to} — 도약 경로 표시
+  let pathTimer = null;
   let modalDepth = 0;
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
   let lowTimeWarned = { w: false, b: false };
@@ -121,6 +123,17 @@
       if (pending && pending.squares.includes(i)) sq.classList.add('pick');
       if (flashSquares.has(i)) sq.classList.add('flash');
 
+      // 도약 경로 — 지나간 칸에 순번을 찍어 어떻게 간 것인지 보여 준다
+      if (pathHint) {
+        const k = pathHint.steps.indexOf(i);
+        if (k >= 0) {
+          sq.classList.add('pathstep');
+          sq.appendChild(el('span', 'pathno', String(k + 1)));
+        }
+        if (i === pathHint.from) sq.classList.add('pathfrom');
+        if (i === pathHint.to) sq.classList.add('pathend');
+      }
+
       const p = g.bd[i];
       if (p) {
         const pe = el('div', 'pc ' + (p.color === 'w' ? 'wp' : 'bp'), GLYPH[p.type]);
@@ -210,6 +223,35 @@
     render();
   }
 
+  /* 도약(나이트)처럼 '어떻게 간 건지' 가 안 보이는 수만 경로를 그린다.
+     미끄러지는 기물은 사이 칸이 뻔하므로 그리지 않는다. */
+  function leapHint(from, to) {
+    const g = G();
+    const p = g.bd[from];
+    if (!p || p.type !== 'n') return null;
+    const steps = E.leapPath(from, to);
+    return steps.length ? { steps, from, to } : null;
+  }
+
+  function setPathHint(h) {
+    const same = (!h && !pathHint) || (h && pathHint && pathHint.from === h.from && pathHint.to === h.to);
+    if (same) return;
+    clearTimeout(pathTimer); pathTimer = null;
+    pathHint = h;
+    renderBoard();
+  }
+
+  // 둔 뒤에 잠깐 보여 준다 (상대 화면에서도 같은 경로가 뜬다)
+  function showPathFor(lm, ms) {
+    if (!lm || !lm.path || !lm.path.length) return false;
+    clearTimeout(pathTimer);
+    // pinned — 방금 둔 수를 보여 주는 중이다. 마우스가 판 위를 스쳐도 지우지 않는다.
+    pathHint = { steps: lm.path, from: lm.from, to: lm.to, pinned: true };
+    renderBoard();
+    pathTimer = setTimeout(() => { pathHint = null; renderBoard(); }, ms || 3600);
+    return true;
+  }
+
   function squareAt(x, y) {
     const n = document.elementFromPoint(x, y);
     const sq = n && n.closest ? n.closest('#board .sq') : null;
@@ -234,7 +276,7 @@
         toast(why ? `이 기물은 지금 움직일 수 없습니다 — ${why}` : '둘 수 있는 곳이 없습니다');
         SFX().deny();
       } else SFX().lift();
-    } else { sel = -1; dests = []; }
+    } else { sel = -1; dests = []; setPathHint(null); }
     renderBoard();
   }
 
@@ -298,11 +340,24 @@
     ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px) translate(-50%, -50%)`;
     // 호버 강조
     const over = squareAt(ev.clientX, ev.clientY);
+    const want = (over >= 0 && dests.includes(over)) ? leapHint(drag.from, over) : null;
+    if (want) setPathHint(want);
+    else if (pathHint && !pathHint.pinned) setPathHint(null);
     document.querySelectorAll('#board .sq.over').forEach(n => n.classList.remove('over'));
     if (over >= 0 && dests.includes(over)) {
       const n = document.querySelector(`#board .sq[data-i="${over}"]`);
       if (n) n.classList.add('over');
     }
+  }
+
+  // 기물을 고른 채 갈 곳 위에 올리면 그리로 가는 경로를 그려 준다
+  function onBoardHover(ev) {
+    if (drag || review || pending) return;
+    const over = sel >= 0 ? squareAt(ev.clientX, ev.clientY) : -1;
+    const want = (over >= 0 && dests.includes(over)) ? leapHint(sel, over) : null;
+    // 방금 둔 수를 보여 주는 중이면, 다른 곳을 가리켜도 그대로 둔다
+    if (!want && pathHint && pathHint.pinned) return;
+    setPathHint(want);
   }
 
   async function onPointerUp(ev) {
@@ -380,7 +435,7 @@
         E.sqName(lm.from) + '→' + E.sqName(lm.to) + pr +
         (cap ? '<span class="lmcap">' + cap + '</span>' : '');
       mv.title = '이 수가 지나간 칸을 표시합니다';
-      mv.onclick = () => flash([lm.from, lm.to], null, null, true);
+      mv.onclick = () => { if (!showPathFor(lm)) flash([lm.from, lm.to], null, null, true); };
       box.appendChild(mv);
     } else {
       box.appendChild(el('span', 'striplast none', '아직 안 둠'));
@@ -597,6 +652,9 @@
     }
     if (g.ply !== prev.ply) {
       const captured = g.kills.w !== prev.kills.w || g.kills.b !== prev.kills.b;
+      // 도약으로 둔 수는 어떻게 간 것인지 잠깐 그려 준다 (양쪽 화면 모두)
+      const moved = E.other(g.turn);
+      showPathFor(g.lastBySide[moved]);
       const lm = Game().lastMove;
       if (lm && lm.castle) SFX().castle();
       else if (lm && lm.promo) SFX().promote();
@@ -1422,7 +1480,7 @@
     Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc, mySide: opts.mySide || 'w' });
     // 2인 대전·온라인에서는 난이도가 의미 없다
     $('#g-diff').style.display = mode === 'ai' ? '' : 'none';
-    $('#restart').textContent = mode === 'online' ? '항복' : '다시 시작';
+    $('#restart').textContent = mode === 'online' ? '재대국 요청' : '다시 시작';
   }
 
   function boot() {
@@ -1437,6 +1495,8 @@
 
     const board = $('#board');
     board.addEventListener('pointerdown', onPointerDown);
+    board.addEventListener('pointermove', onBoardHover);
+    board.addEventListener('pointerleave', () => { if (!(pathHint && pathHint.pinned)) setPathHint(null); });
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     board.addEventListener('contextmenu', e => e.preventDefault());
@@ -1482,12 +1542,22 @@
     $('#restart').onclick = () => {
       if (Game().mode === 'online') {
         if (G().result) { global.Net.askRematch(); toast('재대국을 요청했습니다'); return; }
-        if (!window.confirm('항복하시겠습니까?')) return;
-        global.Net.resign();
-        Game().finishOnline(global.Net.side === 'w' ? 'b' : 'w', '항복했습니다');
+        if (!window.confirm('지금 판을 버리고 재대국을 요청할까요?')) return;
+        global.Net.askRematch();
+        toast('재대국을 요청했습니다');
         return;
       }
       startGame(gm.mode);
+    };
+
+    $('#resign').onclick = () => {
+      const g = G();
+      if (!g || g.result) return;
+      const who = Game().mode === 'online'
+        ? '항복하시겠습니까? 이 판은 패배로 기록됩니다.'
+        : `${sideName(g.turn)}이(가) 항복합니다. 진행할까요?`;
+      if (!window.confirm(who)) return;
+      Game().resign();
     };
     $('#flip').onclick = () => { flip = !flip; render(); };
     $('#codex').onclick = openCodex;

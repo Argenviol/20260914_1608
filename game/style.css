@@ -1194,3 +1194,31 @@ body.reviewing #turnbar { display: none; }
   background: var(--wds-background-status-negative); color: var(--wds-status-negative);
   border: 1px solid var(--wds-status-negative);
 }
+
+/* ═══════════════ 도약 경로 ═══════════════ */
+/* 나이트처럼 건너뛰는 수는 어떻게 간 것인지가 안 보인다.
+   지나간 칸에 순번을 찍어 두는 쪽도 상대도 같은 길을 보게 한다. */
+.sq.pathstep::after {
+  content: ''; position: absolute; inset: 14%;
+  border: 2px dashed var(--wds-status-cautionary);
+  border-radius: 50%; opacity: .85; pointer-events: none;
+}
+/* 경로 위에 기물이 서 있어도 순번이 읽혀야 한다 → 가운데가 아니라 모서리에 */
+.pathno {
+  position: absolute; left: 3px; top: 2px; z-index: 4;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: var(--wds-status-cautionary); color: var(--wds-static-white);
+  font-size: 10px; font-weight: 800; line-height: 1; pointer-events: none;
+}
+.sq.pathfrom { box-shadow: inset 0 0 0 3px var(--wds-status-cautionary); }
+.sq.pathend {
+  box-shadow: inset 0 0 0 3px var(--wds-status-cautionary);
+  background-image: radial-gradient(circle at center,
+    color-mix(in srgb, var(--wds-status-cautionary) 30%, transparent) 0%, transparent 62%);
+}
+
+/* 항복 — 되돌릴 수 없는 동작이라 negative */
+.nav.danger { color: var(--wds-status-negative); border-color: var(--wds-line-status-negative-normal); }
+.nav.danger:hover { background: var(--wds-background-status-negative); border-color: var(--wds-status-negative); }

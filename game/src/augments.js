@@ -350,12 +350,9 @@
   def('N6a', {
     async onAfterMove(G, side, api, ctx) {
       if (ctx.mover.type !== 'n') return;
-      const [r0, c0] = rc(ctx.move.from), [r1, c1] = rc(ctx.move.to);
-      const dr = r1 - r0, dc = c1 - c0;
-      // L자 경로의 중간 두 칸
-      const path = [];
-      if (Math.abs(dr) === 2) { path.push(idx(r0 + Math.sign(dr), c0), idx(r0 + dr, c0)); }
-      else { path.push(idx(r0, c0 + Math.sign(dc)), idx(r0, c0 + dc)); }
+      // 경로 계산은 엔진의 leapPath 하나로 모았다.
+      // 여기서 따로 세던 시절에는 N11b(범위 2배)를 만나면 엉뚱한 칸을 집었다.
+      const path = E.leapPath(ctx.move.from, ctx.move.to);
       const until = E.untilMyTurns(G, 2);
       let n = 0;
       for (const s of path) if (s !== ctx.move.to && G.bd[s] && E.phaseOut(G, s, until)) n++;

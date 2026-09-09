@@ -279,6 +279,8 @@
       promo: move.promo || null,
       castle: move.castle || null,
       victim: victim ? victim.type : null,
+      // 도약이면 지나간 칸. 상대 화면에서도 같은 경로를 보여 주려고 판에 남긴다.
+      path: moverType === 'n' ? E.leapPath(from, move.to) : [],
     };
 
     // 처치 처리
@@ -408,6 +410,21 @@
     // 이 상태의 turn 은 여전히 내 색이라 상대는 beginTurn 을 돌리지 않는다 → 핑퐁이 생기지 않는다.
     global.Net.push(null);
     if (Game.onUpdate) Game.onUpdate('turnstart');
+  };
+
+  /* 항복. 온라인이면 상대에게도 알린다.
+     AI·2인 대전에서는 지금 둘 차례인 쪽(온라인이면 나)이 진다. */
+  Game.resign = function () {
+    const G = Game.G;
+    if (!G || G.result) return null;
+    const loser = Game.mode === 'online' ? Game.mySide : G.turn;
+    const who = loser === 'w' ? '백' : '흑';
+    if (Game.mode === 'online') global.Net.resign();
+    G.result = { winner: opp(loser), reason: `${who} 항복` };
+    pushLog(`${who} 항복 — ${loser === 'w' ? '흑' : '백'} 승리`);
+    if (Game.mode === 'online') global.Net.push(null);
+    if (Game.onUpdate) Game.onUpdate('move');
+    return loser;
   };
 
   // 상대가 항복했거나 연결이 끊겨 내가 이기는 경우

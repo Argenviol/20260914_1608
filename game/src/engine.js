@@ -251,6 +251,30 @@
     return Object.assign({ from, to }, extra || {});
   }
 
+  /* 도약 기물이 '어떻게 갔는지'.
+     실제로는 건너뛰므로 중간 칸이 막혀도 상관없지만, 그래서 더더욱
+     어떤 길로 간 것인지 눈에 보여야 두는 쪽도 상대도 납득한다.
+     from 과 to 는 빼고, 지나간 칸만 순서대로 돌려준다. */
+  function leapPath(from, to) {
+    const [r0, c0] = rc(from), [r1, c1] = rc(to);
+    const dr = r1 - r0, dc = c1 - c0;
+    const ar = Math.abs(dr), ac = Math.abs(dc);
+    const sr = Math.sign(dr), sc = Math.sign(dc);
+
+    // 보통 나이트 (2,1) — 긴 쪽으로 두 칸 간 뒤 옆으로 한 칸
+    if (ar === 2 && ac === 1) return [idx(r0 + sr, c0), idx(r0 + dr, c0)];
+    if (ac === 2 && ar === 1) return [idx(r0, c0 + sc), idx(r0, c0 + dc)];
+
+    // N11b (4,2) — 직선으로 두 칸 + 대각선으로 두 칸
+    if (ar === 4 && ac === 2) {
+      return [idx(r0 + sr, c0), idx(r0 + 2 * sr, c0), idx(r0 + 3 * sr, c0 + sc)];
+    }
+    if (ac === 4 && ar === 2) {
+      return [idx(r0, c0 + sc), idx(r0, c0 + 2 * sc), idx(r0 + sr, c0 + 3 * sc)];
+    }
+    return [];
+  }
+
   function slide(G, from, dirs, side, out, phaseAllow) {
     phaseAllow = phaseAllow || 0;
     const [r0, c0] = rc(from);
@@ -667,7 +691,7 @@
 
   global.Engine = {
     FILES, VALUE, KO, KO2T, START,
-    rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID,
+    rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
     untilMyTurns, untilOppTurns, addEff, effs, hasEff, dropEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,
