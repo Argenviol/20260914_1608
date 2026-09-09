@@ -951,7 +951,7 @@ body.athome { overflow: hidden; }
   padding: var(--wds-space-32) var(--wds-space-20);
 }
 #home.hidden { display: none; }
-.homeinner { width: 100%; max-width: 900px; }
+.homeinner { width: 100%; max-width: 1180px; }
 .homehead { text-align: center; margin-bottom: var(--wds-space-32); }
 .hometitle {
   margin: 0; font-size: clamp(36px, 7vw, 60px); font-weight: 800;
@@ -959,9 +959,9 @@ body.athome { overflow: hidden; }
 }
 .homesub { margin: var(--wds-space-6) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
 
-/* 모드 카드 3장이 한 줄, 기록은 그 아래 가로로 */
-.homegrid { display: grid; grid-template-columns: 1fr; gap: var(--wds-space-14); align-items: start; }
-.modecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wds-space-16); }
+/* AI · 2인 · 온라인 3장이 한 줄, 기록은 그 옆 */
+.homegrid { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: var(--wds-space-16); align-items: start; }
+.modecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wds-space-14); }
 .modecard { min-width: 0;
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-normal);
@@ -1007,21 +1007,17 @@ body.athome { overflow: hidden; }
   border: 1px solid var(--wds-line-normal-normal);
   border-radius: var(--wds-radius-16);
   padding: var(--wds-space-16); box-shadow: var(--wds-shadow-small);
-  /* 판 아래에 놓이므로, 기록이 쌓여도 메인이 한 화면을 넘지 않게 묶어 둔다 */
-  display: flex; flex-direction: column; max-height: 29vh; min-height: 0;
+  /* 모드 카드와 나란히 선다. 기록이 쌓여도 카드보다 길어지지 않게 묶어 둔다. */
+  display: flex; flex-direction: column; max-height: 46vh; min-height: 0;
 }
 .recordcard #h-records { min-height: 0; }
 .rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-8); }
-/* 판 아래에 가로로 눕는 기록 — 항목이 옆으로 흐르고, 한 줄로 눕는다 */
-#h-records { display: flex; flex-direction: column; gap: var(--wds-space-6); }
+/* 좁은 세로 칸이라 항목은 두 줄짜리 원래 모양 그대로. 넘치면 목록만 스크롤한다. */
+#h-records { display: flex; flex-direction: column; gap: var(--wds-space-8); min-height: 0; }
 #h-records .reclist {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
-  gap: var(--wds-space-6); max-height: min(104px, 13vh); overflow: auto;
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  overflow: auto; min-height: 0;
 }
-/* 세로로 길던 항목을 한 줄로 눕힌다 (사유는 툴팁으로 남는다) */
-#h-records .recitem { grid-template-columns: auto auto 1fr; align-items: center; padding: var(--wds-space-6) var(--wds-space-10); }
-#h-records .rwhy { display: none; }
-#h-records .rwhen { grid-column: auto; text-align: right; white-space: nowrap; }
 .recempty { color: var(--wds-label-alternative); font-size: var(--wds-label1-size); line-height: 1.65; }
 .recsum { font-size: var(--wds-body2-size); margin-bottom: var(--wds-space-8); }
 .recsum .rw { color: var(--wds-status-positive); font-weight: 700; }
@@ -1053,7 +1049,12 @@ body.athome { overflow: hidden; }
 
 /* ═══════════════ 반응형 ═══════════════ */
 @media (max-width: 1060px) {
+  /* 더 좁아지면 기록을 카드 아래로 내린다 */
   .homegrid { grid-template-columns: 1fr; }
+  .recordcard { max-height: 30vh; }
+}
+@media (max-width: 900px) {
+  .modecards { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 980px) {
   /* 오른쪽 패널을 판 아래로 */
