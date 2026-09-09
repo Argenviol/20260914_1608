@@ -949,13 +949,14 @@
     const list = el('div', 'reclist');
     for (const r of all.slice(0, 8)) {
       const row = el('div', 'recitem ' + r.outcome);
-      const label = r.mode === 'ai'
+      // AI·온라인은 내 승패, 2인 대전은 어느 색이 이겼는지로 적는다
+      const label = (r.mode === 'ai' || r.mode === 'online')
         ? ({ win: '승리', lose: '패배', draw: '무승부' }[r.outcome] || r.outcome)
         : ({ white: '백 승', black: '흑 승', draw: '무승부' }[r.outcome] || r.outcome);
       const when = new Date(r.at);
       const mm = `${when.getMonth() + 1}/${when.getDate()}`;
       row.innerHTML = `<span class="rres">${label}</span>` +
-        `<span class="rmode">${r.mode === 'ai' ? 'AI ' + (global.AI.LEVELS[r.difficulty] || {}).label : '2인'}</span>` +
+        `<span class="rmode">${r.mode === 'ai' ? 'AI ' + (global.AI.LEVELS[r.difficulty] || {}).label : r.mode === 'online' ? '온라인' : '2인'}</span>` +
         `<span class="rwhy">${r.reason}</span>` +
         `<span class="rwhen">${mm} · ${r.moves}수 · 증강 ${r.augs.w + r.augs.b}</span>`;
       list.appendChild(row);

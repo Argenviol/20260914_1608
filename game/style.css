@@ -957,11 +957,11 @@ body.athome { overflow: hidden; }
   margin: 0; font-size: clamp(36px, 7vw, 60px); font-weight: 800;
   line-height: 1.2; letter-spacing: -0.02em; color: var(--wds-label-normal);
 }
-.homesub { margin: var(--wds-space-10) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
+.homesub { margin: var(--wds-space-6) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
 
-.homegrid { display: grid; grid-template-columns: 1fr 296px; gap: var(--wds-space-20); align-items: start; }
-/* AI · 2인 두 장은 원래대로. 온라인은 그 아래 가로 한 줄을 통째로 쓴다. */
-.modecards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--wds-space-16); }
+/* 모드 카드 3장이 한 줄, 기록은 그 아래 가로로 */
+.homegrid { display: grid; grid-template-columns: 1fr; gap: var(--wds-space-14); align-items: start; }
+.modecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wds-space-16); }
 .modecard { min-width: 0;
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-normal);
@@ -1007,8 +1007,21 @@ body.athome { overflow: hidden; }
   border: 1px solid var(--wds-line-normal-normal);
   border-radius: var(--wds-radius-16);
   padding: var(--wds-space-16); box-shadow: var(--wds-shadow-small);
+  /* 판 아래에 놓이므로, 기록이 쌓여도 메인이 한 화면을 넘지 않게 묶어 둔다 */
+  display: flex; flex-direction: column; max-height: 29vh; min-height: 0;
 }
-.rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-12); }
+.recordcard #h-records { min-height: 0; }
+.rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-8); }
+/* 판 아래에 가로로 눕는 기록 — 항목이 옆으로 흐르고, 한 줄로 눕는다 */
+#h-records { display: flex; flex-direction: column; gap: var(--wds-space-6); }
+#h-records .reclist {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: var(--wds-space-6); max-height: min(104px, 13vh); overflow: auto;
+}
+/* 세로로 길던 항목을 한 줄로 눕힌다 (사유는 툴팁으로 남는다) */
+#h-records .recitem { grid-template-columns: auto auto 1fr; align-items: center; padding: var(--wds-space-6) var(--wds-space-10); }
+#h-records .rwhy { display: none; }
+#h-records .rwhen { grid-column: auto; text-align: right; white-space: nowrap; }
 .recempty { color: var(--wds-label-alternative); font-size: var(--wds-label1-size); line-height: 1.65; }
 .recsum { font-size: var(--wds-body2-size); margin-bottom: var(--wds-space-8); }
 .recsum .rw { color: var(--wds-status-positive); font-weight: 700; }
@@ -1114,19 +1127,10 @@ body.reviewing #turnbar { display: none; }
 .reviewbar .skipbtn:hover { border-color: var(--wds-primary-normal); color: var(--wds-label-normal); }
 
 /* ═══════════════ 온라인 대전 ═══════════════ */
-/* ── 온라인 카드는 두 칸을 가로로 쓴다. 위의 두 장은 건드리지 않는다 ── */
-.modecard.online { grid-column: 1 / -1; }
-.onlinerow {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--wds-space-20); flex-wrap: wrap;
-}
-.modecard.online .mtop { margin-bottom: 0; flex: 1 1 300px; min-width: 0; }
-.modecard.online .mdesc { margin-top: 4px; }
-.onlineactions { display: flex; align-items: center; gap: var(--wds-space-8); flex: 0 1 auto; }
-.modecard.online .startbtn { margin-top: 0; white-space: nowrap; }
-.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: 0; }
+/* 다른 모드 카드와 같은 세로형. 참가 줄만 추가로 붙는다. */
+.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: var(--wds-space-8); }
 .modecard.online .joinrow input {
-  width: 132px; min-width: 0;
+  flex: 1 1 auto; min-width: 0;
   background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
   border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-10);
   padding: var(--wds-space-12) var(--wds-space-10);
@@ -1135,11 +1139,7 @@ body.reviewing #turnbar { display: none; }
 }
 .modecard.online .joinrow input::placeholder { letter-spacing: normal; font-weight: 500; }
 .modecard.online .joinrow input:focus { outline: none; border-color: var(--wds-primary-normal); }
-@media (max-width: 700px) {
-  .onlinerow { flex-direction: column; align-items: stretch; }
-  .onlineactions { flex-direction: column; align-items: stretch; }
-  .modecard.online .joinrow input { width: auto; flex: 1 1 auto; }
-}
+.modecard.online .joinrow .startbtn { flex: 0 0 auto; margin-top: 0; padding: var(--wds-space-12) var(--wds-space-20); }
 
 /* 방 대기 화면 */
 #lobby {
