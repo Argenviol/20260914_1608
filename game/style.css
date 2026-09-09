@@ -959,8 +959,12 @@ body.athome { overflow: hidden; }
 }
 .homesub { margin: var(--wds-space-10) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
 
-.homegrid { display: grid; grid-template-columns: 1fr 296px; gap: var(--wds-space-20); align-items: start; }
-.modecards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--wds-space-16); }
+.homegrid { display: grid; grid-template-columns: minmax(0, 1fr) 264px; gap: var(--wds-space-20); align-items: start; }
+@media (max-width: 1180px) { .homegrid { grid-template-columns: minmax(0, 1fr) 232px; } }
+/* 모드 카드 3장 — 자리가 좁아지면 알아서 2장, 1장으로 접힌다.
+   1fr 만 쓰면 카드 하나의 최소 너비가 다른 칸을 밀어내 폭이 제각각이 된다. */
+.modecards { display: grid; grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)); gap: var(--wds-space-16); }
+.modecard { min-width: 0; }
 .modecard {
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-normal);
@@ -1111,3 +1115,70 @@ body.reviewing #turnbar { display: none; }
   border-color: var(--wds-line-normal-normal); color: var(--wds-label-alternative);
 }
 .reviewbar .skipbtn:hover { border-color: var(--wds-primary-normal); color: var(--wds-label-normal); }
+
+/* ═══════════════ 온라인 대전 ═══════════════ */
+.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: var(--wds-space-8); }
+.modecard.online .joinrow input {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-10) var(--wds-space-12);
+  font: inherit; font-weight: 700; letter-spacing: .18em; text-align: center;
+  text-transform: uppercase;
+}
+.modecard.online .joinrow input:focus { outline: none; border-color: var(--wds-primary-normal); }
+.modecard.online .joinrow .startbtn { flex: 0 0 auto; margin-top: 0; padding-left: var(--wds-space-20); padding-right: var(--wds-space-20); }
+.pvpnote.small { font-size: var(--wds-label2-size); margin-top: var(--wds-space-10); }
+
+/* 방 대기 화면 */
+#lobby {
+  position: fixed; inset: 0; z-index: 125;
+  background: var(--wds-material-dimmer); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: var(--wds-space-20);
+}
+#lobby.hidden { display: none; }
+.lobbycard {
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-16);
+  box-shadow: var(--wds-shadow-xlarge);
+  padding: var(--wds-space-32); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: var(--wds-space-12);
+  max-width: 420px; width: 100%;
+}
+.lobbytitle { font-size: var(--wds-title2-size); font-weight: 700; }
+.lobbysub { font-size: var(--wds-label1-size); color: var(--wds-label-alternative); }
+.roomcode {
+  font-size: 44px; font-weight: 800; letter-spacing: .22em;
+  color: var(--wds-primary-normal);
+  background: var(--wds-background-status-positive);
+  border: 2px dashed var(--wds-primary-normal);
+  border-radius: var(--wds-radius-12);
+  padding: var(--wds-space-12) var(--wds-space-20); margin-left: .22em;
+}
+.lobbystatus {
+  font-size: var(--wds-label1-size); color: var(--wds-label-neutral);
+  min-height: 1.4em; line-height: 1.5;
+}
+
+/* 연결 상태 배너 */
+#netbar {
+  position: fixed; left: 50%; transform: translateX(-50%); top: var(--wds-space-14); z-index: 146;
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-8) var(--wds-space-16);
+  font-size: var(--wds-label1-size); font-weight: 700;
+  box-shadow: var(--wds-shadow-large); max-width: 88vw; text-align: center;
+}
+#netbar.hidden { display: none; }
+#netbar.net-ok {
+  background: var(--wds-background-status-positive); color: var(--wds-status-positive);
+  border: 1px solid var(--wds-status-positive);
+}
+#netbar.net-warn {
+  background: var(--wds-background-status-cautionary); color: var(--wds-status-cautionary);
+  border: 1px solid var(--wds-status-cautionary);
+}
+#netbar.net-bad {
+  background: var(--wds-background-status-negative); color: var(--wds-status-negative);
+  border: 1px solid var(--wds-status-negative);
+}

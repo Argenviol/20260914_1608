@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무제체스</title>
-<link rel="stylesheet" href="wds-tokens.css?v=1788920830">
-<link rel="stylesheet" href="style.css?v=1788920830">
+<link rel="stylesheet" href="wds-tokens.css?v=1788941840">
+<link rel="stylesheet" href="style.css?v=1788941840">
 </head>
 <body>
 
@@ -49,6 +49,22 @@
             판 뒤집기로 진영을 바꿔가며 두세요.
           </div>
           <button class="startbtn alt" id="h-pvp">2인 대전 시작</button>
+        </div>
+
+        <div class="modecard online">
+          <div class="mtop">
+            <span class="micon">⚔</span>
+            <div>
+              <div class="mtitle">온라인 대전</div>
+              <div class="mdesc">방 코드를 주고받아 각자 집에서 둡니다</div>
+            </div>
+          </div>
+          <button class="startbtn" id="h-host">방 만들기</button>
+          <div class="joinrow">
+            <input id="h-code" maxlength="5" placeholder="코드 입력" autocomplete="off" spellcheck="false">
+            <button class="startbtn alt" id="h-join">참가</button>
+          </div>
+          <div class="pvpnote small">비밀 증강은 상대에게 보이지 않습니다.</div>
         </div>
       </div>
 
@@ -140,14 +156,28 @@
   </aside>
 </main>
 
+<div id="lobby" class="hidden">
+  <div class="lobbycard">
+    <div class="lobbytitle">방이 열렸습니다</div>
+    <div class="lobbysub">이 코드를 상대에게 알려 주세요</div>
+    <div class="roomcode" id="lb-code">-----</div>
+    <button class="nav" id="lb-copy">코드 복사</button>
+    <div class="lobbystatus" id="lb-status">상대를 기다리는 중…</div>
+    <button class="nav ghost small" id="lb-cancel">취소하고 메인으로</button>
+  </div>
+</div>
+
+<div id="netbar" class="hidden"></div>
+
 <div id="dragghost"></div>
 
-<script src="src/data.js?v=1788920830"></script>
-<script src="src/sfx.js?v=1788920830"></script>
-<script src="src/engine.js?v=1788920830"></script>
-<script src="src/augments.js?v=1788920830"></script>
-<script src="src/ai.js?v=1788920830"></script>
-<script src="src/game.js?v=1788920830"></script>
-<script src="src/ui.js?v=1788920830"></script>
+<script src="src/data.js?v=1788941840"></script>
+<script src="src/sfx.js?v=1788941840"></script>
+<script src="src/engine.js?v=1788941840"></script>
+<script src="src/augments.js?v=1788941840"></script>
+<script src="src/ai.js?v=1788941840"></script>
+<script src="src/net.js?v=1788941840"></script>
+<script src="src/game.js?v=1788941840"></script>
+<script src="src/ui.js?v=1788941840"></script>
 </body>
 </html>

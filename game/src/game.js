@@ -117,7 +117,11 @@
     if (Game.G.augs[side].includes(id)) return;
     Game.G.augs[side].push(id);
     const a = global.AUG_BY_ID[id];
-    pushLog(`${side === 'w' ? '백' : '흑'} 증강 획득: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
+    // 비밀 증강은 기록에도 이름을 남기지 않는다.
+    // (온라인에서는 이 줄이 그대로 상대에게 넘어가고, AI전에서도 기록만 읽으면 다 보였다)
+    pushLog(a.secret && !Game.G.revealed[id]
+      ? `${side === 'w' ? '백' : '흑'} 증강 획득: 비밀 (${a.piece} ${a.tier}개) — 발동 전까지 비공개`
+      : `${side === 'w' ? '백' : '흑'} 증강 획득: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
     if (!a.secret) {
       Game.G.revealed[id] = true;
       if (Game.api && Game.api.announce) Game.api.announce(side, id, 'gain');
@@ -144,6 +148,8 @@
     if (Game.G.revealed[id]) return;
     Game.G.revealed[id] = true;
     const owner = Game.G.augs.w.includes(id) ? 'w' : (Game.G.augs.b.includes(id) ? 'b' : null);
+    const a = global.AUG_BY_ID[id];
+    if (a) pushLog(`${owner === 'w' ? '백' : '흑'} 비밀 증강 공개: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
     if (owner && Game.api && Game.api.announce) Game.api.announce(owner, id, 'reveal');
   }
   Game.revealAug = revealAug;
@@ -226,6 +232,9 @@
       }
     }
   }
+
+  // 상태를 받은 쪽이 자기 기록용 스냅샷을 남길 때 쓴다
+  Game.recordSnapshot = function (side, from, to) { pushSnapshot(side, from, to); };
 
   /* ───────── 이동 실행 ───────── */
   Game.legalFor = function (sq) {
@@ -351,10 +360,64 @@
     pushSnapshot(side, from, move.to);
 
     // 상대가 둔 직후 훅 (증강 소유자 기준)
+    // 구현이 B1b 하나뿐이고 사람에게 묻지 않는다 → 둔 쪽에서 돌려도 안전하다
     await fire('onOppMoved', opp(side), { move });
+
+    // 온라인 대전의 경계.
+    // beginTurn 안에는 onSched(B3c 부활 선택) 처럼 '차례가 시작되는 쪽'이 답해야 하는
+    // 프롬프트가 들어 있다. 그래서 여기서 판을 넘기고, beginTurn 은 상대 화면에서 돈다.
+    if (Game.mode === 'online') {
+      global.Net.push({ side, from, to: move.to });
+      return;
+    }
 
     await beginTurn(G.turn);
   }
+
+  /* ───────── 온라인: 받은 판을 채택하고, 내 차례면 턴을 연다 ───────── */
+  Game.adoptRemote = async function (s) {
+    const G = Game.G;
+    if (!G || Game.mode !== 'online') return;
+
+    const newlyRevealed = global.Net.adopt(s) || [];
+    for (const id of newlyRevealed) {
+      const a = global.AUG_BY_ID[id];
+      if (!a || a.hidden) continue;
+      const owner = G.augs.w.includes(id) ? 'w' : (G.augs.b.includes(id) ? 'b' : null);
+      if (owner && owner !== Game.mySide && Game.api && Game.api.announce) {
+        Game.api.announce(owner, id, 'reveal');
+      }
+    }
+
+    Game.startClockTurn();
+    Game.clockPaused = false;
+    if (Game.onUpdate) Game.onUpdate('remote');
+    if (G.result) return;
+
+    // 내 차례가 아니거나(상대의 턴 시작 결과였음), 이미 이 ply 의 턴을 연 적이 있으면 끝.
+    // 두 번째 조건이 없으면 새로고침으로 재접속했을 때 예약 증강이 또 터진다.
+    if (G.turn !== Game.mySide || G.begunPly === G.ply) return;
+
+    Game.busy = true;
+    try { await beginTurn(G.turn); }
+    finally { Game.busy = false; }
+    G.begunPly = G.ply;
+
+    // beginTurn 이 판을 바꿨을 수 있다(예약 증강 부활·제거, 체크메이트 판정).
+    // 상대가 그걸 못 보면 화면이 어긋나므로 항상 한 번 되돌려 보낸다.
+    // 이 상태의 turn 은 여전히 내 색이라 상대는 beginTurn 을 돌리지 않는다 → 핑퐁이 생기지 않는다.
+    global.Net.push(null);
+    if (Game.onUpdate) Game.onUpdate('turnstart');
+  };
+
+  // 상대가 항복했거나 연결이 끊겨 내가 이기는 경우
+  Game.finishOnline = function (winner, reason) {
+    const G = Game.G;
+    if (!G || G.result) return;
+    G.result = { winner, reason };
+    pushLog(reason);
+    if (Game.onUpdate) Game.onUpdate('move');
+  };
 
   function checkEncircle(G, side) {
     if (!E.ownsAug(G, side, 'K11b')) return false;
@@ -527,10 +590,15 @@
   Game.checkFlag = function () {
     const G = Game.G;
     if (!G || !G.clock || G.result || Game.clockPaused) return false;
+    // 온라인에서는 자기 차례일 때만 판정한다.
+    // 상대가 증강을 고르느라 시계를 멈췄는지는 이쪽에서 알 수 없어서,
+    // 남의 시계를 대신 재면 멀쩡한 사람을 시간패로 만든다.
+    if (Game.mode === 'online' && G.turn !== Game.mySide) return false;
     if (Game.clockRemain(G.turn) <= 0) {
       G.clock[G.turn] = 0;
       G.result = { winner: opp(G.turn), reason: '시간 초과' };
       pushLog(`${G.turn === 'w' ? '백' : '흑'} 시간 초과 — ${G.turn === 'w' ? '흑' : '백'} 승리`);
+      if (Game.mode === 'online') global.Net.push(null);
       return true;
     }
     return false;
@@ -541,11 +609,15 @@
     if (Game.clockPaused || !Game.G || !Game.G.clock) return;
     Game.chargeClockSilently();
     Game.clockPaused = true;
+    // 상대 화면에서도 내 시계가 멈춰 보이게 한다 (안 그러면 내가 증강을 고르는 동안
+    // 상대 화면에서는 내 시간이 계속 줄어드는 것처럼 보인다)
+    if (Game.mode === 'online') global.Net.note('pause', Game.G.clock);
   };
   Game.resumeClock = function () {
     if (!Game.clockPaused) return;
     Game.clockPaused = false;
     turnStartedAt = performance.now();
+    if (Game.mode === 'online') global.Net.note('resume', Game.G.clock);
   };
   Game.chargeClockSilently = function () {
     const G = Game.G;
@@ -562,7 +634,13 @@
     return !(Game.mode === 'ai' && side === Game.aiSide);
   };
   Game.humanSide = function () {
+    if (Game.mode === 'online') return Game.mySide;
     return Game.mode === 'ai' ? opp(Game.aiSide) : Game.G.turn;
+  };
+  // 이 화면에서 지금 둘 수 있는가 (온라인이면 내 차례일 때만)
+  Game.myTurn = function () {
+    if (Game.mode !== 'online') return true;
+    return Game.G.turn === Game.mySide;
   };
 
   /* ───────── AI ───────── */
@@ -604,6 +682,7 @@
     Game.G = E.newGame();
     Game.mode = (opts && opts.mode) || 'pvp';
     Game.aiSide = (opts && opts.aiSide) || 'b';
+    Game.mySide = (opts && opts.mySide) || 'w';        // 온라인에서 내가 잡은 색
     if (opts && opts.difficulty) Game.difficulty = opts.difficulty;
     if (opts && opts.timeControl !== undefined) Game.timeControl = opts.timeControl;
     const tc = Game.timeControl;
@@ -615,8 +694,13 @@
     global.ensureAugImpls();
     pushLog(Game.mode === 'ai'
       ? `게임 시작 — AI 대전 (난이도: ${global.AI.LEVELS[Game.difficulty].label}). 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.`
-      : '게임 시작 — 2인 대전. 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.');
+      : Game.mode === 'online'
+        ? `게임 시작 — 온라인 대전 (나: ${Game.mySide === 'w' ? '백' : '흑'}). 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.`
+        : '게임 시작 — 2인 대전. 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.');
     if (Game.onUpdate) Game.onUpdate('start');
+    // 방을 만든 쪽(백)이 첫 판을 넘겨 양쪽 기물 id 를 맞춘다.
+    // 재접속으로 들어온 경우에는 보내면 안 된다 — 서버가 갖고 있는 진행 중인 판을 덮어쓴다.
+    if (Game.mode === 'online' && opts && opts.pushInitial) global.Net.push(null);
     maybeAI();
   };
 })(window);

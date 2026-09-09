@@ -219,7 +219,8 @@
   /* ───────── 클릭 + 드래그 ───────── */
   function canControl() {
     const g = G();
-    return !g.result && !Game().busy && Game().isHuman(g.turn) && !pending && !review;
+    return !g.result && !Game().busy && Game().isHuman(g.turn)
+      && Game().myTurn() && !pending && !review;
   }
 
   function selectSquare(i) {
@@ -326,6 +327,11 @@
 
   function whoIs(side) {
     const gm = Game();
+    if (gm.mode === 'online') {
+      return side === gm.mySide
+        ? { title: '나 (' + sideName(side) + ')', kind: 'me' }
+        : { title: '상대 (' + sideName(side) + ')', kind: 'human' };
+    }
     if (gm.mode === 'ai') {
       if (side === gm.aiSide) return { title: 'AI · ' + global.AI.LEVELS[gm.difficulty].label, kind: 'ai' };
       return { title: '나', kind: 'me' };
@@ -406,7 +412,8 @@
     const t = $('#turnbar');
     t.className = '';
     t.innerHTML = '';
-    t.appendChild(el('span', 'modetag', gm.mode === 'ai' ? 'AI 대전' : '2인 대전'));
+    t.appendChild(el('span', 'modetag',
+      gm.mode === 'ai' ? 'AI 대전' : gm.mode === 'online' ? '온라인 대전' : '2인 대전'));
 
     if (g.result) {
       t.classList.add('over');
@@ -419,6 +426,10 @@
     let msg;
     if (who.kind === 'ai') msg = sideName(g.turn) + ' 차례 — AI가 생각하고 있습니다';
     else if (who.kind === 'me') msg = sideName(g.turn) + ' 차례 — 당신이 둘 차례입니다';
+    else if (gm.mode === 'online') {
+      msg = sideName(g.turn) + ' 차례 — '
+        + (gm.clockPaused ? '상대가 증강을 고르는 중입니다' : '상대가 두는 중입니다');
+    }
     else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
     t.appendChild(el('span', 'turntext', msg));
 
@@ -463,6 +474,12 @@
   function augCard(id, dimSecret) {
     const g = G();
     const a = global.AUG_BY_ID[id];
+    // 모르는 id (가면 해독 실패 등) 로 화면 전체가 멈추지는 않게 한다
+    if (!a) {
+      const u = el('div', 'aug hidden');
+      u.innerHTML = '<span class="tag secret">비밀</span> 알 수 없는 증강';
+      return u;
+    }
     const hidden = a.secret && !g.revealed[id] && dimSecret;
     const c = el('div', 'aug' + (hidden ? ' hidden' : ''));
     if (hidden) {
@@ -849,7 +866,9 @@
     if (result.winner) {
       outcome = (gm.mode === 'ai')
         ? (result.winner === gm.aiSide ? 'lose' : 'win')
-        : (result.winner === 'w' ? 'white' : 'black');
+        : (gm.mode === 'online')
+          ? (result.winner === gm.mySide ? 'win' : 'lose')
+          : (result.winner === 'w' ? 'white' : 'black');
     }
     saveRecord({
       at: Date.now(), mode: gm.mode,
@@ -862,8 +881,8 @@
 
     let cls, title, sub = result.reason;
     if (!result.winner) { cls = 'draw'; title = '무승부'; SFX().draw(); }
-    else if (gm.mode === 'ai') {
-      const meWin = result.winner !== gm.aiSide;
+    else if (gm.mode === 'ai' || gm.mode === 'online') {
+      const meWin = gm.mode === 'ai' ? result.winner !== gm.aiSide : result.winner === gm.mySide;
       cls = meWin ? 'win' : 'lose';
       title = meWin ? '승리!' : '패배';
       if (meWin) SFX().win(); else SFX().lose();
@@ -873,7 +892,12 @@
     card.appendChild(el('div', 'endtitle', title));
     card.appendChild(el('div', 'endsub', sub));
     const again = el('button', 'nav', '한 판 더');
-    again.onclick = () => startGame(gm.mode);
+    if (gm.mode === 'online') {
+      again.textContent = '재대국 요청';
+      again.onclick = () => { global.Net.askRematch(); again.textContent = '요청함 — 상대 대기 중'; again.disabled = true; };
+    } else {
+      again.onclick = () => startGame(gm.mode);
+    }
     card.appendChild(again);
     box.appendChild(card);
     if (cls !== 'lose') {
@@ -1144,6 +1168,178 @@
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
+
+  /* ═══════════════════ 온라인 대전 ═══════════════════ */
+
+  const ROOM_KEY = 'mujeChess.room';
+  let rematchPending = false;
+
+  function saveRoom() {
+    try {
+      if (global.Net.code) sessionStorage.setItem(ROOM_KEY, JSON.stringify({ code: global.Net.code, side: global.Net.side }));
+      else sessionStorage.removeItem(ROOM_KEY);
+    } catch (e) { /* 시크릿 창 등 */ }
+  }
+  function loadRoom() {
+    try { return JSON.parse(sessionStorage.getItem(ROOM_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function clearRoom() { try { sessionStorage.removeItem(ROOM_KEY); } catch (e) { } }
+
+  function showLobby(code, status) {
+    $('#lobby').classList.remove('hidden');
+    $('#lb-code').textContent = code || '\u2026';
+    $('#lb-status').textContent = status || '상대를 기다리는 중\u2026';
+    $('#lb-copy').style.display = code ? '' : 'none';
+  }
+  function hideLobby() { $('#lobby').classList.add('hidden'); }
+
+  let netbarTimer = null;
+  function netBanner(text, cls, sticky) {
+    const b = $('#netbar');
+    if (!text) { b.classList.add('hidden'); return; }
+    b.className = 'net-' + (cls || 'warn');
+    b.textContent = text;
+    clearTimeout(netbarTimer);
+    if (!sticky) netbarTimer = setTimeout(() => b.classList.add('hidden'), 3200);
+  }
+
+  function inOnlineGame() { return Game().mode === 'online' && G(); }
+
+  function startOnline(side, tc, pushInitial, resume) {
+    rematchPending = false;
+    // 재접속이면 가면 해독표를 되살린다. 새 판이면 지운다.
+    // (여기서 무조건 지우면, 방금 되살린 표를 다시 날려 내 비밀 증강을 나도 못 읽게 된다)
+    if (resume) global.Net.loadVault(); else global.Net.resetMasks();
+    startGame('online', { mySide: side, timeControl: tc || null, pushInitial: !!pushInitial });
+  }
+
+  function wireNet() {
+    const Net = global.Net;
+
+    Net.onEvent = async (type, m) => {
+      switch (type) {
+
+        case 'connected':
+          netBanner('서버에 연결되었습니다', 'ok');
+          return;
+
+        case 'disconnected':
+          if (inOnlineGame() || $('#lobby').classList.contains('hidden') === false) {
+            netBanner('연결이 끊겼습니다 — 다시 연결하는 중\u2026', 'warn', true);
+          }
+          return;
+
+        case 'created':
+          saveRoom();
+          showLobby(m.code);
+          return;
+
+        case 'joined':
+          saveRoom();
+          hideLobby();
+          if (m.resumed) {
+            // 새로고침·끊김 뒤 복귀. 판은 곧 서버가 보내 준다.
+            if (Game().mode !== 'online') startOnline(m.side, m.tc, false, true);
+            else global.Net.loadVault();
+            netBanner('다시 연결되었습니다', 'ok');
+          } else {
+            startOnline(m.side, m.tc, false);      // 참가자(흑). 판은 호스트가 보낸다.
+          }
+          return;
+
+        case 'peer':
+          if (m.online) {
+            netBanner('상대가 들어왔습니다', 'ok');
+            // 호스트는 상대가 들어온 시점에 판을 연다
+            if (Net.side === 'w' && Game().mode !== 'online') {
+              hideLobby();
+              startOnline('w', m.tc || pendingTC, true);
+            } else {
+              hideLobby();
+            }
+          } else if (inOnlineGame()) {
+            netBanner('상대의 연결이 끊겼습니다 — 돌아오기를 기다리는 중\u2026', 'warn', true);
+          }
+          return;
+
+        case 'state':
+          await Game().adoptRemote(m);
+          return;
+
+        case 'note':
+          // 상대가 증강을 고르는 동안 이쪽 화면의 시계도 멈춘다
+          if (m.kind === 'pause') { Game().clockPaused = true; }
+          else if (m.kind === 'resume') {
+            if (m.clock && G()) G().clock = m.clock;
+            Game().clockPaused = false;
+            Game().startClockTurn();
+          }
+          render();
+          return;
+
+        case 'resign':
+          Game().finishOnline(Net.side, '상대가 항복했습니다');
+          return;
+
+        case 'rematch':
+          if (!inOnlineGame()) return;
+          rematchPending = true;
+          netBanner('상대가 재대국을 요청했습니다', 'ok', true);
+          askRematch();
+          return;
+
+        case 'rematchOk':
+          startOnline(Net.side, Game().timeControl, Net.side === 'w');
+          return;
+
+        case 'error':
+          hideLobby();
+          netBanner(m.why || '오류가 발생했습니다', 'bad');
+          clearRoom();
+          return;
+      }
+    };
+  }
+
+  function askRematch() {
+    const wrap = el('div');
+    wrap.appendChild(el('h3', null, '상대가 재대국을 요청했습니다'));
+    wrap.appendChild(el('div', 'sub', '수락하면 같은 방에서 새 판을 시작합니다. 색은 그대로입니다.'));
+    const list = el('div', 'optlist');
+    const yes = el('button', 'opt primary'); yes.appendChild(el('div', 'optlabel', '수락'));
+    const no = el('button', 'opt'); no.appendChild(el('div', 'optlabel', '거절'));
+    yes.onclick = () => { close(); global.Net.acceptRematch(); startOnline(global.Net.side, Game().timeControl, global.Net.side === 'w'); };
+    no.onclick = () => { close(); rematchPending = false; };
+    list.appendChild(yes); list.appendChild(no);
+    wrap.appendChild(list);
+    const close = overlay(wrap);
+  }
+
+  let pendingTC = null;
+
+  function hostRoom() {
+    pendingTC = parseTC($('#h-tc').value);
+    SFX().unlock();
+    showLobby(null, '서버를 깨우는 중입니다\u2026 (처음 한 번은 1분까지 걸릴 수 있습니다)');
+    global.Net.createRoom(pendingTC);
+  }
+
+  function joinRoom() {
+    const code = ($('#h-code').value || '').toUpperCase().trim();
+    if (code.length < 4) { netBanner('코드를 입력해 주세요', 'bad'); return; }
+    pendingTC = parseTC($('#h-tc').value);
+    SFX().unlock();
+    showLobby(code, '서버를 깨우는 중입니다\u2026 (처음 한 번은 1분까지 걸릴 수 있습니다)');
+    global.Net.joinRoom(code, pendingTC);
+  }
+
+  function leaveOnline() {
+    global.Net.disconnect();
+    clearRoom();
+    hideLobby();
+    netBanner(null);
+  }
+
   /* ═══════════════════ 시계 루프 ═══════════════════ */
   function clockLoop() {
     const g = G(), gm = Game();
@@ -1208,11 +1404,13 @@
     document.body.classList.remove('athome');
   }
 
-  function startGame(mode) {
+  function startGame(mode, opts) {
+    opts = opts || {};
     $('#endfx').className = ''; $('#endfx').innerHTML = '';
     $('#banners').innerHTML = '';
-    flip = false;
-    const tc = parseTC($('#h-tc').value);
+    // 온라인에서는 내 색이 아래로 오게 둔다
+    flip = mode === 'online' && opts.mySide === 'b';
+    const tc = opts.timeControl !== undefined ? opts.timeControl : parseTC($('#h-tc').value);
     $('#tcinfo').textContent = tc ? tc.label : '무제한';
     hideHome();
     review = null;
@@ -1220,9 +1418,10 @@
     const rb = $('#reviewbar'); if (rb) rb.remove();
     setTab('aug');
     SFX().unlock();
-    Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc });
-    // 2인 대전에서는 난이도가 의미 없다
+    Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc, mySide: opts.mySide || 'w' });
+    // 2인 대전·온라인에서는 난이도가 의미 없다
     $('#g-diff').style.display = mode === 'ai' ? '' : 'none';
+    $('#restart').textContent = mode === 'online' ? '항복' : '다시 시작';
   }
 
   function boot() {
@@ -1249,12 +1448,46 @@
     // 메인 화면
     $('#h-ai').onclick = () => startGame('ai');
     $('#h-pvp').onclick = () => startGame('pvp');
+
+    // 온라인 대전
+    wireNet();
+    $('#h-host').onclick = hostRoom;
+    $('#h-join').onclick = joinRoom;
+    $('#h-code').addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+    $('#h-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom(); });
+    $('#lb-cancel').onclick = leaveOnline;
+    $('#lb-copy').onclick = () => {
+      const c = $('#lb-code').textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(c).then(() => toast('코드를 복사했습니다: ' + c));
+      else toast('코드: ' + c);
+    };
+    // 새로고침으로 끊겼던 방이 있으면 자리로 돌아간다
+    const saved = loadRoom();
+    if (saved && saved.code && saved.side) {
+      global.Net.code = saved.code; global.Net.side = saved.side;
+      showLobby(saved.code, '두던 방으로 돌아가는 중입니다\u2026');
+      global.Net.connect();
+    }
     $('#h-codex').onclick = openCodex;
     $('#h-rules').onclick = openRules;
 
     // 인게임
-    $('#tohome').onclick = () => { renderHomeRecords(); showHome(); };
-    $('#restart').onclick = () => startGame(gm.mode);
+    $('#tohome').onclick = () => {
+      if (Game().mode === 'online') leaveOnline();
+      renderHomeRecords(); showHome();
+    };
+    $('#restart').onclick = () => {
+      if (Game().mode === 'online') {
+        if (G().result) { global.Net.askRematch(); toast('재대국을 요청했습니다'); return; }
+        if (!window.confirm('항복하시겠습니까?')) return;
+        global.Net.resign();
+        Game().finishOnline(global.Net.side === 'w' ? 'b' : 'w', '항복했습니다');
+        return;
+      }
+      startGame(gm.mode);
+    };
     $('#flip').onclick = () => { flip = !flip; render(); };
     $('#codex').onclick = openCodex;
     $('#rules').onclick = openRules;

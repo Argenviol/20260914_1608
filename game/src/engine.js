@@ -26,6 +26,9 @@
     return { id: ++UID, type, color, moved: false, augLost: false };
   }
 
+  // 온라인 대전에서 상대가 만든 판을 채택할 때, 그쪽 id 보다 뒤에서 다시 세게 한다
+  function bumpUID(n) { if (n > UID) UID = n; }
+
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 
   function newGame() {
@@ -53,6 +56,7 @@
       log: [],
       hist: [],                      // UCI 기보 (오프닝 북 조회용)
       lastBySide: { w: null, b: null },  // 진영별 마지막 수 (스트립 표시용)
+      begunPly: -1,                  // beginTurn 을 이미 돌린 ply (온라인 재접속 시 중복 발동 방지)
       snaps: [],                     // 수마다의 판 스냅샷 (기록에서 되돌려 보기용)
       clock: null,                   // {w, b, inc, limit} ms. null 이면 무제한
       result: null,                  // {winner, reason}
@@ -663,7 +667,7 @@
 
   global.Engine = {
     FILES, VALUE, KO, KO2T, START,
-    rc, idx, onBoard, sqName, other, lightSquare, mkPiece,
+    rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID,
     newGame, findKing, piecesOf, materialScore,
     untilMyTurns, untilOppTurns, addEff, effs, hasEff, dropEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,
