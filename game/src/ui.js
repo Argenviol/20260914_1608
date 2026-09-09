@@ -50,6 +50,21 @@
     }
     return html;
   }
+  /* 지속 유형 — 원본 시트가 칸 색으로 구분하던 축이다.
+     기물은 카드 제목에 이미 적혀 있으므로, 색은 이 축에 쓰는 편이 훨씬 많이 알려준다. */
+  const DUR = {
+    '턴제한':   { cls: 'd-turn',  icon: '⏱', hint: '정해진 턴이 지나면 사라집니다' },
+    '횟수제한': { cls: 'd-count', icon: '↻', hint: '정해진 횟수만 쓰고 사라집니다' },
+    '영구지속': { cls: 'd-perm',  icon: '∞', hint: '판이 끝날 때까지 남습니다' },
+  };
+  function durOf(tag) { return DUR[tag] || { cls: 'd-none', icon: '·', hint: '지속 개념이 없는 즉시 효과입니다' }; }
+  function durChip(tag) {
+    const d = durOf(tag);
+    const c = el('span', 'durchip ' + d.cls, d.icon + ' ' + tag);
+    c.title = d.hint;
+    return c;
+  }
+
   function termTags(terms) {
     const wrap = el('div', 'termtags');
     for (const t of (terms || [])) {
@@ -339,7 +354,7 @@
     const bar = el('div', 'bar'), fill = el('div', 'fill');
     if (thr === null) fill.style.width = '100%';
     else {
-      const prevT = g.tierIdx[side] === 0 ? 0 : Math.max(0, global.TIERS[g.tierIdx[side] - 1] - g.thrCut[side]);
+      const prevT = g.tierIdx[side] === 0 ? 0 : global.TIERS[g.tierIdx[side] - 1];
       fill.style.width = Math.max(0, Math.min(100,
         ((g.kills[side] - prevT) / Math.max(1, thr - prevT)) * 100)) + '%';
     }
@@ -454,10 +469,12 @@
       c.innerHTML = '<span class="tag secret">비밀</span> <b>' + a.piece + ' ' + a.tier +
         '개</b> — 발동 전까지 비공개';
     } else {
+      c.classList.add(durOf(a.tag).cls);
       c.innerHTML = '<span class="tag t' + a.tier + '">' + a.tier + '</span>' +
         '<b>' + a.piece + '</b><span class="augid">' + id + '</span>' +
-        (a.secret ? '<span class="tag secret">비밀</span>' : '') +
+        (a.secret ? '<span class="tag secret">◆ 비밀</span>' : '') +
         '<div class="augtext">' + termHTML(a.text, a.terms) + '</div>';
+      c.insertBefore(durChip(a.tag), c.firstChild);
       if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
     }
     return c;
@@ -488,8 +505,7 @@
         const thr = gm.nextThreshold(g, side);
         const tiers = el('div', 'tiers');
         global.TIERS.forEach((t, i) => {
-          const cut = Math.max(0, t - g.thrCut[side]);
-          tiers.appendChild(el('span', 'tier' + (i < g.tierIdx[side] ? ' done' : ''), String(cut)));
+          tiers.appendChild(el('span', 'tier' + (i < g.tierIdx[side] ? ' done' : ''), String(t)));
         });
         box.appendChild(tiers);
         if (thr !== null) {
@@ -596,10 +612,18 @@
       wrap.appendChild(el('h3', null, prompt));
       const list = el('div', 'optlist');
       for (const o of options) {
-        const b = el('button', 'opt');
+        const b = el('button', 'opt' + (o.block ? ' blocked' : ''));
         b.appendChild(el('div', 'optlabel', o.label));
         if (o.desc) b.appendChild(el('div', 'optdesc', o.desc));
-        b.onclick = () => { SFX().pick(); close(); res(o.value); };
+        if (o.block) {
+          // 고른 뒤에 '안 된다' 고 알리지 않는다 — 애초에 못 고르게 하고 이유를 적어 둔다
+          b.disabled = true;
+          b.appendChild(el('span', 'blockx', '✕'));
+          b.appendChild(el('div', 'blockwhy', o.block));
+          b.onclick = () => SFX().deny();
+        } else {
+          b.onclick = () => { SFX().pick(); close(); res(o.value); };
+        }
         list.appendChild(b);
       }
       wrap.appendChild(list);
@@ -654,16 +678,19 @@
       if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `${rounds}번 중 ${round}번째`));
       head.appendChild(meta);
       wrap.appendChild(head);
-      wrap.appendChild(el('div', 'sub', '하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.'));
+      const guide = el('div', 'sub');
+      guide.appendChild(document.createTextNode('하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
+      guide.appendChild(durLegend());
+      wrap.appendChild(guide);
 
       const cards = el('div', 'cards');
       for (const o of offer) {
         const a = o.aug;
-        const c = el('button', 'card p-' + a.type + (o.block ? ' blocked' : ''));
+        const c = el('button', 'card ' + durOf(a.tag).cls + (o.block ? ' blocked' : ''));
         const top = el('div', 'cardtop');
         top.appendChild(el('span', 'cardid', a.id));
-        top.appendChild(el('span', 'cardtag', a.tag));
-        if (a.secret) { const b = el('span', 'cardtag secret', '비밀'); top.appendChild(b); }
+        top.appendChild(durChip(a.tag));
+        if (a.secret) { const b = el('span', 'cardtag secret', '◆ 비밀'); top.appendChild(b); }
         c.appendChild(top);
         const body = el('div', 'cardtext');
         body.innerHTML = termHTML(a.text, a.terms);
@@ -692,8 +719,11 @@
       const ov = closeOverlay.el;
 
       const backBar = el('div', 'peekbar');
-      backBar.appendChild(el('span', null, '판을 보는 중입니다'));
-      const back = el('button', 'skipbtn', '증강 고르기로');
+      const bmsg = el('div', 'peekmsg');
+      bmsg.appendChild(el('b', null, '판을 보는 중입니다'));
+      bmsg.appendChild(el('span', 'peeksub', '증강은 아직 고르지 않았습니다'));
+      backBar.appendChild(bmsg);
+      const back = el('button', 'skipbtn big', '증강 고르기로 →');
       backBar.appendChild(back);
       document.body.appendChild(backBar);
 
@@ -918,70 +948,197 @@
   }
 
   /* ═══════════════════ 도감 · 규칙 ═══════════════════ */
+
+  // 지속 유형 색 범례 — 카드 색이 무슨 뜻인지 한 줄로 알려준다
+  function durLegend() {
+    const w = el('span', 'durlegend');
+    for (const t of ['턴제한', '횟수제한', '영구지속']) w.appendChild(durChip(t));
+    const sec = el('span', 'cardtag secret', '\u25C6 비밀');
+    sec.title = '상대에게는 발동 전까지 보이지 않습니다';
+    w.appendChild(sec);
+    return w;
+  }
+
+  // 도감·규칙 공용: 버튼 한 줄짜리 선택기
+  function segmented(items, cur, onPick) {
+    const box = el('div', 'seg');
+    for (const it of items) {
+      const b = el('button', it.value === cur ? 'on' : null, it.label);
+      b.onclick = () => { SFX().pick(); onPick(it.value); };
+      box.appendChild(b);
+    }
+    return box;
+  }
+
+  // 증강 한 장 (도감용). 드래프트 카드와 같은 색·같은 배치로 보여 준다.
+  function codexCard(a) {
+    const c = el('div', 'ccard ' + durOf(a.tag).cls);
+    const top = el('div', 'cardtop');
+    top.appendChild(el('span', 'cardid', a.id));
+    top.appendChild(durChip(a.tag));
+    if (a.secret) top.appendChild(el('span', 'cardtag secret', '\u25C6 비밀'));
+    c.appendChild(top);
+    const body = el('div', 'ctext');
+    body.innerHTML = termHTML(a.text, a.terms);
+    c.appendChild(body);
+    if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
+    return c;
+  }
+
+  let codexPiece = '폰', codexTier = '', codexQuery = '';
+
   function openCodex() {
     const wrap = el('div', 'codex');
-    wrap.appendChild(el('h2', null, `증강 도감 · ${global.AUGMENTS.length}종`));
-    wrap.appendChild(el('div', 'sub', '엑셀(무제체스_증강표_v2.xlsx)과 같은 내용입니다. 왼쪽부터 1 · 3 · 6 · 11개 처치 순서.'));
-    const ctl = el('div', 'row');
-    const s1 = el('select'); s1.appendChild(new Option('전체 기물', ''));
-    for (const p of global.PIECES_KO) s1.appendChild(new Option(p, p));
-    const s2 = el('select'); s2.appendChild(new Option('전체 티어', ''));
-    for (const t of global.TIERS) s2.appendChild(new Option(`${t}개`, String(t)));
-    ctl.appendChild(s1); ctl.appendChild(s2);
-    wrap.appendChild(ctl);
+
+    const head = el('div', 'codexhead');
+    const h = el('div');
+    h.appendChild(el('h2', null, `증강 도감 \u00B7 ${global.AUGMENTS.length}종`));
+    h.appendChild(el('div', 'sub', '원본 증강표와 같은 배치입니다. 칸(기물 \u00D7 처치 수)마다 선택지가 3개이고, ' +
+      '게임에서는 그 칸 하나를 그대로 펼쳐 1개만 고릅니다.'));
+    head.appendChild(h);
+    head.appendChild(durLegend());
+    wrap.appendChild(head);
+
+    const bar = el('div', 'codexbar');
+    const pieceRow = el('div', 'segrow');
+    pieceRow.appendChild(el('span', 'seglabel', '기물'));
+    const pieceBox = el('span'); pieceRow.appendChild(pieceBox);
+    const tierRow = el('div', 'segrow');
+    tierRow.appendChild(el('span', 'seglabel', '처치 수'));
+    const tierBox = el('span'); tierRow.appendChild(tierBox);
+    const search = el('input', 'codexsearch');
+    search.type = 'search';
+    search.placeholder = '문구 \u00B7 ID \u00B7 용어로 찾기';
+    search.value = codexQuery;
+    search.oninput = () => { codexQuery = search.value.trim(); fill(); };
+    bar.appendChild(pieceRow); bar.appendChild(tierRow); bar.appendChild(search);
+    wrap.appendChild(bar);
+
     const body = el('div', 'codexbody');
     wrap.appendChild(body);
+
+    function drawSegs() {
+      pieceBox.innerHTML = ''; tierBox.innerHTML = '';
+      pieceBox.appendChild(segmented(
+        [{ label: '전체', value: '' }].concat(global.PIECES_KO.map(p => ({ label: p, value: p }))),
+        codexPiece, v => { codexPiece = v; drawSegs(); fill(); }));
+      tierBox.appendChild(segmented(
+        [{ label: '전체', value: '' }].concat(global.TIERS.map(t => ({ label: `${t}개`, value: String(t) }))),
+        codexTier, v => { codexTier = v; drawSegs(); fill(); }));
+    }
+
+    function match(a) {
+      if (!codexQuery) return true;
+      const q = codexQuery.toLowerCase();
+      return a.id.toLowerCase().includes(q) || a.text.toLowerCase().includes(q)
+        || (a.terms || []).some(t => t.includes(codexQuery)) || a.tag.includes(codexQuery);
+    }
+
     function fill() {
       body.innerHTML = '';
-      const pieces = s1.value ? [s1.value] : global.PIECES_KO;
-      const tiers = s2.value ? [+s2.value] : global.TIERS;
+      const pieces = codexPiece ? [codexPiece] : global.PIECES_KO;
+      const tiers = codexTier ? [+codexTier] : global.TIERS;
+      let shown = 0;
       for (const p of pieces) {
-        const grid = el('div', 'cgrid');
-        grid.appendChild(el('div', 'cpiece', p));
+        const rows = [];
         for (const t of tiers) {
-          const cell = el('div', 'ccell');
-          cell.appendChild(el('div', 'ctier', `${t}개`));
-          for (const a of global.AUGMENTS.filter(x => x.piece === p && x.tier === t)) {
-            const c = el('div', 'crow');
-            c.innerHTML = `<div class="chead"><span class="augid">${a.id}</span><span class="tag">${a.tag}</span>` +
-              (a.secret ? '<span class="tag secret">비밀</span>' : '') + '</div>' +
-              `<div class="ctext">${termHTML(a.text, a.terms)}</div>`;
-            if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
-            cell.appendChild(c);
-          }
-          grid.appendChild(cell);
+          const list = global.AUGMENTS.filter(a => a.piece === p && a.tier === t && match(a));
+          if (list.length) rows.push({ t, list });
         }
-        body.appendChild(grid);
+        if (!rows.length) continue;
+        const sec = el('div', 'csec');
+        const sh = el('div', 'csechead');
+        sh.appendChild(el('b', null, p));
+        sh.appendChild(el('span', 'dim', rows.reduce((n, r) => n + r.list.length, 0) + '종'));
+        sec.appendChild(sh);
+        const cols = el('div', 'ccols');
+        for (const r of rows) {
+          const col = el('div', 'ccol');
+          col.appendChild(el('div', 'ctier', `${r.t}개 처치`));
+          for (const a of r.list) { col.appendChild(codexCard(a)); shown++; }
+          cols.appendChild(col);
+        }
+        sec.appendChild(cols);
+        body.appendChild(sec);
       }
+      if (!shown) body.appendChild(el('div', 'dim', '조건에 맞는 증강이 없습니다.'));
     }
-    s1.onchange = s2.onchange = fill; fill();
+
+    drawSegs(); fill();
     const close = overlay(wrap, { wide: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
   function openRules() {
     const wrap = el('div', 'codex');
-    wrap.appendChild(el('h2', null, '규칙 · 용어'));
+    const head = el('div', 'codexhead');
+    const h = el('div');
+    h.appendChild(el('h2', null, '규칙 \u00B7 용어'));
+    h.appendChild(el('div', 'sub', '보통 체스 규칙 그대로에, 아래 내용이 더해집니다.'));
+    head.appendChild(h);
+    head.appendChild(durLegend());
+    wrap.appendChild(head);
+
     const body = el('div', 'codexbody');
-    body.appendChild(el('h3', null, '기본'));
-    for (const t of [
-      '처치 카운트가 1 · 3 · 6 · 11에 닿을 때마다 그 티어의 증강 3개 중 하나를 얻습니다.',
-      '기물을 클릭하거나 끌어서 둡니다. 제한시간이 다 되면 집니다 (모달이 열려 있는 동안은 시계가 멈춥니다).',
-      '지정불가 기물은 파란 숫자 배지로 남은 수가 표시되며, 체크를 벗어날 때만 예외적으로 움직일 수 있습니다.',
-      '증강이 판을 바꾸면 바뀐 칸이 금색으로 빛나고 어떤 증강 때문인지 배너와 기록에 남습니다.',
-    ]) { const c = el('div', 'crow'); c.appendChild(el('div', 'ctext', t)); body.appendChild(c); }
+
+    /* ── 1. 증강을 얻는 흐름 ── */
+    body.appendChild(el('h3', null, '증강을 얻는 흐름'));
+    const flow = el('div', 'flow');
+    [
+      ['\u2694', '처치한다', '상대 기물을 정상적인 수로 잡습니다. 증강으로 <b>제거</b>한 것은 처치로 세지 않습니다.'],
+      ['\u2191', '카운트가 찬다', '누적 처치가 <b>1 \u00B7 3 \u00B7 6 \u00B7 11</b>에 닿는 순간 드래프트가 열립니다.'],
+      ['\u25A6', '그 칸이 펼쳐진다', '<b>처치를 해낸 기물</b>의 칸이 열립니다. 퀸으로 잡았으면 퀸 증강 3개입니다.'],
+      ['\u2714', '하나만 고른다', '지금 발동해도 아무 일이 없는 증강은 \u2715 로 잠깁니다. 이미 가진 증강도 마찬가지입니다.'],
+    ].forEach(function (row, i) {
+      const c = el('div', 'flowstep');
+      c.innerHTML = '<div class="flowno">' + (i + 1) + '</div>' +
+        '<div class="flowic">' + row[0] + '</div>' +
+        '<div><div class="flowt">' + row[1] + '</div><div class="flowd">' + row[2] + '</div></div>';
+      flow.appendChild(c);
+    });
+    body.appendChild(flow);
+
+    /* ── 2. 조작 ── */
+    body.appendChild(el('h3', null, '조작'));
+    const basics = el('div', 'rgrid');
+    for (const row of [
+      ['두는 법', '기물을 클릭하거나 끌어서 놓습니다. 갈 수 있는 칸에 점이 찍힙니다.'],
+      ['제한시간', '다 쓰면 집니다. 증강을 고르거나 대상을 찍는 동안에는 시계가 멈춥니다.'],
+      ['증강이 발동하면', '바뀐 칸이 금색으로 빛나고, 어떤 증강 때문인지 배너와 진행 기록에 남습니다.'],
+      ['지난 판 보기', '진행 기록에서 착수 줄을 누르면 그때의 판을 그대로 다시 볼 수 있습니다.'],
+    ]) {
+      const c = el('div', 'rcard');
+      c.innerHTML = '<div class="rname">' + row[0] + '</div><div class="ctext">' + row[1] + '</div>';
+      basics.appendChild(c);
+    }
+    body.appendChild(basics);
+
+    /* ── 3. 전역 룰 (설계 사유는 기획 문서에만 두고 여기서는 생략) ── */
     body.appendChild(el('h3', null, '전역 룰'));
+    const rules = el('div', 'rgrid');
     for (const r of global.GLOBAL_RULES) {
-      const c = el('div', 'crow');
-      c.innerHTML = `<div class="chead"><b>${r.name}</b></div><div class="ctext">${r.body}</div><div class="corig">${r.why}</div>`;
-      body.appendChild(c);
+      const c = el('div', 'rcard');
+      c.innerHTML = '<div class="rname">' + r.name + '</div><div class="ctext">' + r.body + '</div>';
+      rules.appendChild(c);
     }
+    body.appendChild(rules);
+
+    /* ── 4. 용어 (증강 문구에 칠해지는 색 그대로) ── */
     body.appendChild(el('h3', null, '용어'));
+    const terms = el('div', 'rgrid');
     for (const g2 of global.GLOSSARY) {
-      const c = el('div', 'crow');
-      c.innerHTML = `<div class="chead"><b>${g2.term}</b></div><div class="ctext">${g2.desc}</div>`;
-      body.appendChild(c);
+      const st = global.TERM_STYLES[g2.term];
+      const c = el('div', 'rcard');
+      const name = el('div', 'rname');
+      const chip = el('span', 'tw', g2.term);
+      if (st) { chip.style.color = st.fg; chip.style.background = st.bg; chip.style.borderColor = st.line; }
+      name.appendChild(chip);
+      c.appendChild(name);
+      c.appendChild(el('div', 'ctext', g2.desc));
+      terms.appendChild(c);
     }
+    body.appendChild(terms);
+
     wrap.appendChild(body);
     const close = overlay(wrap, { wide: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);

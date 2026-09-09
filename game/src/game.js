@@ -113,7 +113,7 @@
   }
 
   /* ───────── 증강 획득 ───────── */
-  async function grantAug(side, id) {
+  async function grantAug(side, id, capCtx) {
     if (Game.G.augs[side].includes(id)) return;
     Game.G.augs[side].push(id);
     const a = global.AUG_BY_ID[id];
@@ -125,6 +125,16 @@
       Game.api.announce(side, id, 'secret');       // 무엇인지는 가리고 획득 사실만 알린다
     }
     await fire2(id, 'onGain', side, null);
+
+    // 이 증강을 열어준 처치도 그 증강의 대상이다.
+    // onCapture 는 드래프트보다 먼저 돌기 때문에, 이렇게 한 번 더 흘려보내지 않으면
+    // P1c("적을 처치한 폰이 …") · B3c("방금 적을 처치한 비숍이 …") 처럼
+    // 조건을 만들어 준 바로 그 수에서 정작 발동하지 않는다.
+    if (capCtx && typeof impl(id).onCapture === 'function') {
+      const still = Game.G.bd[capCtx.to];
+      if (still && still.id === capCtx.mover.id) await fire2(id, 'onCapture', side, capCtx);
+    }
+
     if (Game.onUpdate) Game.onUpdate('augs');
   }
   Game.grantAug = grantAug;
@@ -146,7 +156,7 @@
   function nextThreshold(G, side) {
     const i = G.tierIdx[side];
     if (i >= global.TIERS.length) return null;
-    return Math.max(0, global.TIERS[i] - G.thrCut[side]);
+    return global.TIERS[i];
   }
   Game.nextThreshold = nextThreshold;
 
@@ -184,7 +194,7 @@
   }
 
   // byKo = '무엇으로 잡았는가'. 원안의 "어떤 기물로 적을 죽였냐에 따라" 기준.
-  async function runDrafts(side, byKo) {
+  async function runDrafts(side, byKo, capCtx) {
     const G = Game.G;
     let guard = 0;
     while (guard++ < 8) {
@@ -212,7 +222,7 @@
             round: r + 1, rounds, byKo,
           });
         }
-        if (chosenId) await grantAug(side, chosenId);
+        if (chosenId) await grantAug(side, chosenId, capCtx);
       }
     }
   }
@@ -243,6 +253,7 @@
     // 처치 대상 확인
     let victim = G.bd[move.to];
     let victimSq = move.to;
+    let capCtx = null;               // 이 수로 일어난 처치 (드래프트로 얻은 증강에도 넘겨준다)
     if (move.ep) { victimSq = E.idx(move.from >> 3, move.to & 7); victim = G.bd[victimSq]; }
 
     // 플래그 소모
@@ -276,7 +287,8 @@
         Game.G.revealed['B6a'] = true;
         pushLog('B6a — 비숍을 처치한 기물이 함께 죽었습니다.');
       }
-      if (G.bd[move.to]) await fire('onCapture', side, { from, to: move.to, mover, victim, victimSq });
+      capCtx = { from, to: move.to, mover, victim, victimSq };
+      if (G.bd[move.to]) await fire('onCapture', side, capCtx);
     } else {
       pushLog(`${side === 'w' ? '백' : '흑'} ${E.KO[mover.type]} ${E.sqName(from)}→${E.sqName(move.to)}`);
     }
@@ -311,7 +323,7 @@
     }
 
     // 원안 그대로 '어떤 기물로 죽였냐' 기준. 승격 전 종류를 쓴다.
-    await runDrafts(side, victim ? E.KO[moverType] : null);
+    await runDrafts(side, victim ? E.KO[moverType] : null, capCtx);
     if (G.result) return;
 
     // 시계: 이번 수에 쓴 시간을 차감하고 증분을 더한다

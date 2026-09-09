@@ -416,7 +416,7 @@
         G.bd[sq] = p; ids.push(p.id);
       }
       if (ids.length) {
-        untarget(G, side, ids, E.untilMyTurns(G, 1));
+        untarget(G, side, ids, E.untilOppTurns(G, 1));
         api.msg(`N11a — 나이트 ${ids.length}개를 소환했습니다. (1턴 지정불가)`);
       }
     }
@@ -526,6 +526,8 @@
   def('B3b', parityPawn(false, 'B3b'));
 
   def('B3c', {
+    // 원문은 "방금 적을 처치한 비숍이". 이 증강을 열어준 처치도 game.js 의 grantAug 가
+    // 여기로 한 번 더 흘려보내 주므로, 그 비숍부터 지켜보게 된다.
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'b') return;
       sched(G, side, 'B3c', E.untilMyTurns(G, 1), { watchId: ctx.mover.id });
@@ -533,10 +535,23 @@
     async onSched(G, side, api, e) {
       const alive = E.piecesOf(G, side).some(i => G.bd[i].id === e.watchId);
       if (!alive) return;
+      // 스폰 칸이 막힌 종류는 고른 뒤에 '불가' 를 보여주지 않고, 처음부터 잠가서 보여준다.
       const gy = [...new Set(G.grave[side])].filter(t => t !== 'k');
       if (!gy.length) return;
-      const t = await api.pickOption('B3c — 부활시킬 아군 기물을 고르세요',
-        gy.map(x => ({ label: E.KO[x], value: x })));
+      const opts = gy.map(x => {
+        const free = spawnSquaresFor(side, x).filter(s => !G.bd[s]);
+        const home = spawnSquaresFor(side, x).map(E.sqName).join(' · ');
+        return {
+          label: E.KO[x], value: x,
+          desc: free.length ? `스폰 칸 ${free.map(E.sqName).join(' · ')}` : `스폰 칸(${home})이 막혀 있습니다`,
+          block: free.length ? null : '스폰 칸이 비어 있지 않습니다',
+        };
+      });
+      if (!opts.some(o => !o.block)) {
+        api.msg('B3c — 부활할 기물의 스폰 칸이 모두 막혀 있습니다.');
+        return;
+      }
+      const t = await api.pickOption('B3c — 부활시킬 아군 기물을 고르세요', opts);
       if (!t) return;
       const spawns = spawnSquaresFor(side, t).filter(s => !G.bd[s]);
       if (!spawns.length) { api.msg('B3c — 스폰 위치가 비어있지 않아 부활할 수 없습니다.'); return; }
@@ -603,7 +618,7 @@
       const p = G.bd[ctx.checkerSq];
       if (!p) return;
       G.flags[side].B11a = 0;
-      untarget(G, side, [p.id], E.untilMyTurns(G, 1));
+      untarget(G, side, [p.id], E.untilOppTurns(G, 1));
       api.reveal('B11a');
       api.msg(`B11a — 체크를 건 ${E.sqName(ctx.checkerSq)} 기물이 1턴 동안 지정불가 상태가 되었습니다.`);
     }
@@ -792,12 +807,6 @@
 
   def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 강화에서 선택지를 2개 고릅니다.'); } });
 
-  def('K1d', {
-    async onGain(G, side, api) {
-      G.thrCut[side] += 1;
-      api.msg('K1d — 이후 강화에 필요한 처치 수가 1 줄어듭니다.');
-    }
-  });
 
   function grantFrom(pieces, tier, label) {
     return {
@@ -981,7 +990,6 @@
     K1a: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
     K1b: () => null,
     K1c: () => null,
-    K1d: (G, s) => need(G.tierIdx[s] < global.TIERS.length, '더 받을 강화가 없습니다'),
     K3a: (G, s) => need(
       global.AUGMENTS.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.augs[s].includes(a.id)),
       '얻을 수 있는 나이트·비숍 6개 강화가 없습니다'),

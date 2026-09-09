@@ -45,7 +45,6 @@
       kills: { w: 0, b: 0 },         // 처치 카운트
       augs: { w: [], b: [] },        // 보유 증강 id
       tierIdx: { w: 0, b: 0 },       // 소비한 티어 수(0~4)
-      thrCut: { w: 0, b: 0 },        // K1d: 필요 처치 수 감소
       eff: [],                       // 활성 효과
       phased: [],                    // 포영 {pc, sq, owner, until, data}
       grave: { w: [], b: [] },       // 처치/제거된 아군 기물 (부활용)
@@ -92,8 +91,13 @@
   // 지속시간 계산. 증강 획득/발동 시점은 "내 수를 둔 직후"이므로
   //   내 N턴   = 2N 플라이
   //   상대 N턴 = 2N-1 플라이
-  function untilMyTurns(G, n) { return G.ply + 2 * n; }
-  function untilOppTurns(G, n) { return G.ply + 2 * n - 1; }
+  /* 두 헬퍼 모두 '호출 시점의 G.ply 는 효과 주인의 턴 ply' 라는 전제 위에 있다.
+     (onGain / onCapture / onAfterMove / onTurnStart / onCheck / onOppMoved 전부 그렇다)
+       주인의 턴 = P, P+2, P+4 …   /   상대의 턴 = P+1, P+3 …
+     만료 검사(expireEffects)와 포영 복귀(returnPhased)는 G.ply 가 오른 '뒤'에 돌므로,
+     until 은 "이 ply 가 되는 순간 사라진다" 를 뜻한다. */
+  function untilMyTurns(G, n) { return G.ply + 2 * n; }        // 내 n번째 다음 턴이 시작될 때
+  function untilOppTurns(G, n) { return G.ply + 2 * n; }       // 상대의 다음 n턴을 모두 덮는다
 
   function addEff(G, e) {
     e.uid = ++UID;
@@ -318,12 +322,16 @@
         out.push(mv(from, idx(r2, c0), { double: true }));
       }
     }
-    // P1b: 다음 1회 두 번 전진 (총 3칸)
+    // P1b: 다음 1회 두 번 전진.
+    // 아직 안 움직인 폰이면 (2칸 + 1칸) = 3칸, 이미 움직인 폰이면 (1칸 + 1칸) = 2칸이 최대다.
     if (G.flags[side].P1b > 0) {
-      const rr = [r0 + dir, r0 + dir * 2, r0 + dir * 3];
-      if (onBoard(rr[2], c0) && rr.every(r => onBoard(r, c0) && !G.bd[idx(r, c0)])) {
-        out.push(mv(from, idx(rr[2], c0), { p1b: true }));
+      const far = G.bd[from].moved ? 2 : 3;
+      let clear = true;
+      for (let k = 1; k <= far; k++) {
+        const r = r0 + dir * k;
+        if (!onBoard(r, c0) || G.bd[idx(r, c0)]) { clear = false; break; }
       }
+      if (clear) push(idx(r0 + dir * far, c0), { p1b: true });
     }
     // 대각 처치
     for (let k = 1; k <= step; k++) {
