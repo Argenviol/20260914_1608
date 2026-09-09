@@ -959,13 +959,10 @@ body.athome { overflow: hidden; }
 }
 .homesub { margin: var(--wds-space-10) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
 
-.homegrid { display: grid; grid-template-columns: minmax(0, 1fr) 264px; gap: var(--wds-space-20); align-items: start; }
-@media (max-width: 1180px) { .homegrid { grid-template-columns: minmax(0, 1fr) 232px; } }
-/* 모드 카드 3장 — 자리가 좁아지면 알아서 2장, 1장으로 접힌다.
-   1fr 만 쓰면 카드 하나의 최소 너비가 다른 칸을 밀어내 폭이 제각각이 된다. */
-.modecards { display: grid; grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)); gap: var(--wds-space-16); }
-.modecard { min-width: 0; }
-.modecard {
+.homegrid { display: grid; grid-template-columns: 1fr 296px; gap: var(--wds-space-20); align-items: start; }
+/* AI · 2인 두 장은 원래대로. 온라인은 그 아래 가로 한 줄을 통째로 쓴다. */
+.modecards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--wds-space-16); }
+.modecard { min-width: 0;
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-normal);
   border-radius: var(--wds-radius-16);
@@ -1117,18 +1114,32 @@ body.reviewing #turnbar { display: none; }
 .reviewbar .skipbtn:hover { border-color: var(--wds-primary-normal); color: var(--wds-label-normal); }
 
 /* ═══════════════ 온라인 대전 ═══════════════ */
-.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: var(--wds-space-8); }
+/* ── 온라인 카드는 두 칸을 가로로 쓴다. 위의 두 장은 건드리지 않는다 ── */
+.modecard.online { grid-column: 1 / -1; }
+.onlinerow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--wds-space-20); flex-wrap: wrap;
+}
+.modecard.online .mtop { margin-bottom: 0; flex: 1 1 300px; min-width: 0; }
+.modecard.online .mdesc { margin-top: 4px; }
+.onlineactions { display: flex; align-items: center; gap: var(--wds-space-8); flex: 0 1 auto; }
+.modecard.online .startbtn { margin-top: 0; white-space: nowrap; }
+.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: 0; }
 .modecard.online .joinrow input {
-  flex: 1 1 auto; min-width: 0;
+  width: 132px; min-width: 0;
   background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
-  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-8);
-  padding: var(--wds-space-10) var(--wds-space-12);
-  font: inherit; font-weight: 700; letter-spacing: .18em; text-align: center;
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-12) var(--wds-space-10);
+  font: inherit; font-weight: 700; letter-spacing: .16em; text-align: center;
   text-transform: uppercase;
 }
+.modecard.online .joinrow input::placeholder { letter-spacing: normal; font-weight: 500; }
 .modecard.online .joinrow input:focus { outline: none; border-color: var(--wds-primary-normal); }
-.modecard.online .joinrow .startbtn { flex: 0 0 auto; margin-top: 0; padding-left: var(--wds-space-20); padding-right: var(--wds-space-20); }
-.pvpnote.small { font-size: var(--wds-label2-size); margin-top: var(--wds-space-10); }
+@media (max-width: 700px) {
+  .onlinerow { flex-direction: column; align-items: stretch; }
+  .onlineactions { flex-direction: column; align-items: stretch; }
+  .modecard.online .joinrow input { width: auto; flex: 1 1 auto; }
+}
 
 /* 방 대기 화면 */
 #lobby {
