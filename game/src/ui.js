@@ -652,7 +652,8 @@
     if (!b) return;
     const on = Game().mode === 'online';
     b.hidden = !on;
-    b.textContent = chatUnread ? `대화 ${chatUnread}` : '대화';
+    b.textContent = '대화';                    // 글자 폭이 흔들리면 탭이 또 밀린다
+    b.dataset.n = chatUnread > 9 ? '9+' : String(chatUnread);
     b.classList.toggle('unread', chatUnread > 0);
   }
 
@@ -785,7 +786,55 @@
 
   function renderLog() { if (tab === 'log') renderTabPanel(); }
 
-  function render() { renderBoard(); renderStrips(); renderTurnbar(); renderActions(); renderTabPanel(); }
+  /* 판 한 칸 크기를 실제 측정으로 맞춘다.
+
+     CSS 만으로 하면 '판 말고 나머지가 몇 px 인지' 를 상수로 박아야 하는데,
+     스트립은 잡은 기물이 쌓이면 줄이 늘어나고 좁아지면 접힌다. 상수는 그때마다 틀린다.
+     그래서 한 번 그린 뒤 실제 높이를 재고, 넘치면 줄여서 다시 잰다.
+     판을 줄이면 스트립도 좁아져 다시 늘어날 수 있으므로 몇 번 되풀이해 수렴시킨다. */
+  function fitBoard() {
+    const bc = document.querySelector('.board-col');
+    const board = $('#board');
+    const main = document.querySelector('main');
+    if (!bc || !board || !main || document.body.classList.contains('athome')) return;
+
+    const cs = getComputedStyle(main);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const padB = parseFloat(cs.paddingBottom) || 0;
+    const gap = parseFloat(cs.columnGap) || 0;
+
+    const side = document.querySelector('.side-col');
+    const sideR = side ? side.getBoundingClientRect() : null;
+    // 좁은 화면에서는 오른쪽 패널이 판 아래로 내려간다 → 그때는 가로를 다 쓴다
+    const stacked = !sideR || sideR.top > bc.getBoundingClientRect().top + 10;
+    const availW = window.innerWidth - padL - padR - (stacked ? 0 : sideR.width + gap);
+
+    /* 판이 칼럼 밖으로 넘치면 칼럼의 bottom 은 따라 커지지 않는다.
+       그래서 칼럼이 아니라 '판 자체' 와 '판 아래에 오는 것들' 로 재야 한다. */
+    const wrap = $('#boardwrap');
+    const rowGap = parseFloat(getComputedStyle(bc).rowGap) || 0;
+
+    let sq = Math.min(82, Math.floor(availW / 8));
+    for (let i = 0; i < 6; i++) {
+      document.documentElement.style.setProperty('--sq', Math.max(28, sq) + 'px');
+      let below = 0, n = wrap.nextElementSibling;
+      while (n) {
+        const r = n.getBoundingClientRect();
+        if (r.height) below += r.height + rowGap;
+        n = n.nextElementSibling;
+      }
+      const bottom = wrap.getBoundingClientRect().top + board.getBoundingClientRect().height + below;
+      const over = bottom + padB - window.innerHeight;
+      if (over <= 0) break;
+      sq -= Math.max(1, Math.ceil(over / 8));
+    }
+  }
+
+  function render() {
+    renderBoard(); renderStrips(); renderTurnbar(); renderActions(); renderTabPanel();
+    fitBoard();
+  }
   global.renderAll = render;
 
   /* ───────── 소리 판단 (상태 변화를 보고) ───────── */
@@ -1717,6 +1766,12 @@
     gm.onUpdate = (kind) => { sel = -1; dests = []; peek = null; soundForUpdate(kind); render(); };
 
     const board = $('#board');
+    let fitTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(() => { fitBoard(); renderBoard(); }, 80);
+    });
+
     board.addEventListener('pointerdown', onPointerDown);
     board.addEventListener('pointermove', onBoardHover);
     board.addEventListener('pointerleave', () => { if (!(pathHint && pathHint.pinned)) setPathHint(null); });

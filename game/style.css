@@ -40,8 +40,9 @@
   --dur-perm: var(--wds-accent-foreground-purple);
   --dur-none: var(--wds-label-assistive);
 
-  /* 헤더 + 턴바 + 스트립 2개 + 여백을 뺀 높이, 그리고 오른쪽 패널을 뺀 너비 중 작은 값 */
-  --sq: min(82px, calc((100vh - 268px) / 8), calc((100vw - 420px) / 8));
+  /* 첫 그림 전 임시값. 실제 크기는 ui.js 의 fitBoard() 가 재서 덮어쓴다 —
+     스트립 높이가 내용에 따라 변해서 상수로는 못 맞춘다. */
+  --sq: min(82px, calc((100vh - 330px) / 8), calc((100vw - 420px) / 8));
 }
 [data-theme='dark'] {
   --bg-grid: color-mix(in srgb, var(--wds-common-100) 4%, transparent);
@@ -243,10 +244,15 @@ main {
 }
 .col { min-width: 0; height: 100%; min-height: 0; }
 .board-col {
-  width: calc(var(--sq) * 8 + 2px);
-  display: flex; flex-direction: column; gap: var(--wds-space-8);
+  /* 예전에는 칼럼 너비를 판 크기에 그대로 묶어 뒀다. 그러면 판을 줄일수록 스트립이 좁아지고,
+     좁아진 스트립은 줄이 늘어 더 높아져서, 다시 판을 줄여야 하는 악순환이 생긴다.
+     아래 한계(420px)를 둬서 스트립 높이가 더 늘지 않게 막는다. */
+  width: min(max(calc(var(--sq) * 8 + 2px), 420px), 100%);
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--wds-space-8);
   overflow: hidden;
 }
+#turnbar, #oppstrip, #mystrip, #phased, #actions { width: 100%; }
 .side-col { display: flex; flex-direction: column; min-height: 0; }
 
 /* ── 진영 스트립 ── */
@@ -283,16 +289,19 @@ main {
 
 /* ── 오른쪽 탭 패널 ── */
 #tabs {
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  /* 3열로 못박아 뒀더니 '대화' 탭이 생기면서 둘째 줄로 밀렸다.
+     보이는 탭 개수에 맞춰 한 줄로 나눠 갖게 한다 (숨긴 탭은 칸을 차지하지 않는다). */
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   gap: 0; flex: 0 0 auto; margin-bottom: var(--wds-space-8);
 }
 #tabs button {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-normal);
   color: var(--wds-label-alternative);
-  padding: var(--wds-space-8) var(--wds-space-6);
+  padding: var(--wds-space-8) var(--wds-space-4);
   font-size: var(--wds-label1-size); font-weight: 600;
   margin-left: -1px;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #tabs button:first-child { border-radius: var(--wds-radius-8) 0 0 var(--wds-radius-8); margin-left: 0; }
 #tabs button:last-child { border-radius: 0 var(--wds-radius-8) var(--wds-radius-8) 0; }
@@ -1231,8 +1240,10 @@ body.reviewing #turnbar { display: none; }
 /* ── 온라인 대화 ── */
 #tabs button.unread { color: var(--wds-primary-normal); }
 #tabs button.unread::after {
-  content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 5px;
-  border-radius: 50%; background: var(--wds-primary-normal); vertical-align: middle;
+  content: attr(data-n); display: inline-block; min-width: 15px; height: 15px;
+  margin-left: 4px; padding: 0 3px; border-radius: 8px;
+  background: var(--wds-primary-normal); color: var(--wds-static-white);
+  font-size: 9px; font-weight: 800; line-height: 15px; vertical-align: middle;
 }
 .chatlist {
   display: flex; flex-direction: column; gap: var(--wds-space-6);
