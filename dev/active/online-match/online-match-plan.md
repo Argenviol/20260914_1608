@@ -91,8 +91,7 @@ doMove
 
 | 파일 | 상태 | 할 일 |
 |---|---|---|
-| `server/index.js` | 신규 | 정적 파일 + WebSocket 중계, 방 코드, 마지막 상태 보관 |
-| `server/package.json` | 신규 | `ws` 하나만 |
+| `server/relay.py` | 신규 | 정적 파일 + WebSocket 중계, 방 코드, 마지막 상태 보관 (파이썬 표준 라이브러리만) |
 | `game/src/net.js` | 신규 | 접속·방·프로토콜·가면·직렬화 |
 | `game/src/game.js` | 수정 | `mode:'online'`, `beginTurn` 경계, 상태 채택 |
 | `game/src/ui.js` | 수정 | 메인에 온라인 카드, 대기 화면, `canControl`, "상대가 고르는 중" |

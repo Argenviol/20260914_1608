@@ -1,8 +1,8 @@
 # 온라인 대전 — 체크리스트
 
 ## 1. 중계 서버
-- [x] `server/package.json` (`ws` 하나)
-- [x] `server/index.js` — 정적 파일 서빙 + `/ws`
+- [x] 외부 패키지 없음 (초기에는 Node + ws 였으나 파이썬으로 옮김)
+- [x] `server/relay.py` — 정적 파일 서빙 + `/ws` (파이썬 표준 라이브러리만)
 - [x] 방 코드 생성 (헷갈리는 글자 제외한 5자리)
 - [x] create / join / rejoin / state / resign / rematch / peer-left
 - [x] 마지막 상태 보관 → 재접속 시 재전송

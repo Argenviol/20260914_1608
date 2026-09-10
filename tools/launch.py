@@ -2,8 +2,9 @@
 """무제체스 실행기.
 
 로컬 서버를 띄우고 브라우저를 연다.
-- Node 와 server/node_modules 가 있으면 Node 중계 서버를 띄운다 (온라인 대전까지 됨).
-  없으면 파이썬 정적 서버로 떨어진다 (AI·2인 대전만 됨).
+- 기본은 server/relay.py (중계 서버). 온라인 대전까지 된다.
+  파이썬 표준 라이브러리만 쓰므로 따로 설치할 것이 없다.
+- --static 을 주면 온라인 없이 정적 서버로만 띄운다.
 - 포트가 이미 쓰이고 있으면 다음 후보로 넘어간다.
 - 캐시를 끄기 때문에 파일을 고치고 새로고침하면 바로 반영된다.
 - 창을 닫거나 Ctrl+C 를 누르면 서버가 종료된다.
@@ -15,7 +16,6 @@
 import argparse
 import http.server
 import os
-import shutil
 import socket
 import socketserver
 import subprocess
@@ -25,18 +25,8 @@ import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", "game"))
-SERVER = os.path.normpath(os.path.join(HERE, "..", "server"))
+RELAY = os.path.normpath(os.path.join(HERE, "..", "server", "relay.py"))
 CANDIDATE_PORTS = [8777, 8778, 8779, 8090, 8181, 0]   # 0 = 비어있는 포트 아무거나
-
-
-def node_ready():
-    """Node 중계 서버를 띄울 수 있는 상태인가."""
-    node = shutil.which("node")
-    if not node:
-        return None
-    if not os.path.isdir(os.path.join(SERVER, "node_modules", "ws")):
-        return None
-    return node
 
 
 def free_port():
@@ -50,10 +40,10 @@ def free_port():
     return None
 
 
-def run_node(node, port, open_browser_fn):
-    """Node 서버를 이 창에 붙여서 돌린다. 온라인 대전(방 코드)까지 된다."""
-    env = dict(os.environ, PORT=str(port))
-    proc = subprocess.Popen([node, "index.js"], cwd=SERVER, env=env)
+def run_relay(port, open_browser_fn):
+    """중계 서버를 이 창에 붙여서 돌린다. 온라인 대전(방 코드)까지 된다."""
+    env = dict(os.environ, PORT=str(port), PYTHONIOENCODING="utf-8")
+    proc = subprocess.Popen([sys.executable, RELAY], env=env)
     if open_browser_fn:
         threading.Timer(0.9, open_browser_fn).start()
     try:
@@ -120,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--port", type=int, default=None)
-    ap.add_argument("--static", action="store_true", help="Node 가 있어도 정적 서버로만 띄운다")
+    ap.add_argument("--static", action="store_true", help="온라인 없이 정적 서버로만 띄운다")
     args = ap.parse_args()
 
     index = os.path.join(ROOT, "index.html")
@@ -128,9 +118,9 @@ def main():
         print(f"[오류] 게임 파일을 찾지 못했습니다: {index}")
         return 1
 
-    node = None if args.static else node_ready()
+    relay = (not args.static) and os.path.exists(RELAY)
 
-    if node:
+    if relay:
         port = args.port or free_port()
         if port is None:
             print("[오류] 사용할 수 있는 포트를 찾지 못했습니다.")
@@ -149,9 +139,9 @@ def main():
     print("  └────────────────────────────────────┘")
     print()
     print(f"   주소   {url}")
-    print(f"   모드   {'온라인 대전까지 가능 (Node 중계 서버)' if node else 'AI · 2인 대전 (정적 서버)'}")
-    if not node:
-        print("          온라인 대전을 쓰려면 server 폴더에서 npm install 을 한 번 해주세요.")
+    print(f"   모드   {'온라인 대전까지 가능 (중계 서버)' if relay else 'AI · 2인 대전 (정적 서버)'}")
+    if not relay:
+        print("          온라인 대전은 server/relay.py 가 있어야 합니다.")
     print("   종료   이 창을 닫거나 Ctrl+C")
     print()
 
@@ -164,8 +154,8 @@ def main():
             except Exception as e:
                 print(f"   브라우저 자동 실행 실패({e}). 위 주소를 직접 열어주세요.", flush=True)
 
-    if node:
-        return run_node(node, port, open_browser)
+    if relay:
+        return run_relay(port, open_browser)
 
     if open_browser:
         threading.Timer(0.4, open_browser).start()

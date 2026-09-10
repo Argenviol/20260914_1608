@@ -15,8 +15,6 @@ desktop.ini
 # 원본 기획 시트는 공개하지 않는다
 docs/원본_무제체스_증강표.xlsx
 
-# 온라인 중계 서버 의존성 (npm install 로 받는다)
-server/node_modules/
 
 # 로컬 도구 상태
 .omc/
