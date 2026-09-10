@@ -340,7 +340,8 @@ class Handler(socketserver.StreamRequestHandler):
                 return
 
             if path.split("?")[0] == "/healthz":
-                self.respond(200, b"ok", "text/plain; charset=utf-8")
+                # 실행기가 '이미 떠 있는 무제체스 서버' 를 알아보는 표식이기도 하다
+                self.respond(200, b"muje-chess ok", "text/plain; charset=utf-8")
                 return
 
             if method not in ("GET", "HEAD"):
@@ -399,8 +400,20 @@ class Handler(socketserver.StreamRequestHandler):
 
 
 class Server(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
+    """같은 포트에 서버가 두 개 뜨지 못하게 한다.
+
+    Windows 의 SO_REUSEADDR 는 리눅스와 달리 '이미 듣고 있는 포트에 또 바인드' 까지
+    허용한다. 그대로 두면 실행기를 두 번 누른 것만으로 서버가 둘이 되고, 접속이 둘로
+    갈려서 방을 만든 사람과 들어오는 사람이 서로 다른 프로세스에 붙는다.
+    → 들어온 쪽에는 "그런 방이 없습니다" 만 뜬다. 방은 프로세스 메모리에 있으니까.
+    """
     daemon_threads = True
+    allow_reuse_address = (os.name != "nt")
+
+    def server_bind(self):
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def main():
@@ -412,7 +425,13 @@ def main():
         print(f"[오류] 게임 파일을 찾지 못했습니다: {ROOT}")
         return 1
     threading.Thread(target=sweep, daemon=True).start()
-    srv = Server(("0.0.0.0", PORT), Handler)
+    try:
+        srv = Server(("0.0.0.0", PORT), Handler)
+    except OSError:
+        print(f"[오류] 포트 {PORT} 는 이미 쓰이고 있습니다.")
+        print("       이미 떠 있는 무제체스 창을 쓰거나, 그 창을 닫고 다시 실행해 주세요.")
+        print("       (서버가 둘이 되면 방을 만든 사람과 들어오는 사람이 갈라집니다)")
+        return 1
     print(f"무제체스 중계 서버 http://localhost:{PORT}  (온라인 대전 가능)")
     try:
         srv.serve_forever()

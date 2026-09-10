@@ -29,11 +29,42 @@ RELAY = os.path.normpath(os.path.join(HERE, "..", "server", "relay.py"))
 CANDIDATE_PORTS = [8777, 8778, 8779, 8090, 8181, 0]   # 0 = 비어있는 포트 아무거나
 
 
+def already_running(port):
+    """그 포트에 이미 무제체스 서버가 떠 있는가."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.4) as c:
+            c.sendall(b"GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            return b"muje-chess" in c.recv(4096)
+    except OSError:
+        return False
+
+
+def find_running():
+    """이미 떠 있는 무제체스 서버가 있으면 그 포트를 돌려준다.
+
+    실행 버튼을 두 번 누르면 서버가 둘이 된다. 서로 다른 포트에 뜨더라도,
+    방은 프로세스 메모리에 있으므로 한쪽에서 만든 방을 다른 쪽에서 찾을 수 없다.
+    ("그런 방이 없습니다") 그래서 새로 띄우기 전에 먼저 살펴본다.
+    """
+    for p in CANDIDATE_PORTS:
+        if p and already_running(p):
+            return p
+    return None
+
+
 def free_port():
+    """정말로 비어 있는 포트를 고른다.
+
+    그냥 bind 해 보는 것만으로는 부족하다 — Windows 에서는 이미 듣고 있는 포트에도
+    바인드가 성공해 버려서, 쓰고 있는 포트를 '비었다'고 넘겨주게 된다.
+    그러면 서버가 둘이 되고 온라인 대전의 방이 갈린다.
+    """
     for p in CANDIDATE_PORTS:
         with socket.socket() as s:
+            if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             try:
-                s.bind(("127.0.0.1", p))
+                s.bind(("0.0.0.0", p))
                 return s.getsockname()[1]
             except OSError:
                 continue
@@ -119,6 +150,22 @@ def main():
         return 1
 
     relay = (not args.static) and os.path.exists(RELAY)
+
+    # 이미 떠 있으면 새로 띄우지 않고 그 주소를 연다 (서버가 둘이 되면 방이 갈린다)
+    if relay and not args.port:
+        running = find_running()
+        if running:
+            url = f"http://localhost:{running}/index.html"
+            print()
+            print(f"   이미 무제체스가 떠 있습니다 → {url}")
+            print("   그 창을 그대로 쓰시면 됩니다. (서버를 또 띄우면 온라인 대전의 방이 갈립니다)")
+            print()
+            if not args.no_browser:
+                try:
+                    webbrowser.open(url)
+                except Exception:
+                    pass
+            return 0
 
     if relay:
         port = args.port or free_port()
