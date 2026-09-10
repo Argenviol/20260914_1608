@@ -1,0 +1,14 @@
+# Render 배포 설정 (https://render.com)
+#
+# 이 서비스 하나가 게임 파일과 온라인 대전 중계를 모두 맡습니다.
+# relay.py 가 game/ 을 정적 서빙하므로 주소가 하나로 끝납니다.
+services:
+  - type: web
+    name: muje-chess
+    runtime: python
+    region: singapore          # 한국에서 가장 가깝다. 실시간 대전이라 지연이 곧 체감이다.
+    plan: free
+    branch: 김준영_20260909_1719
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server/relay.py
+    healthCheckPath: /healthz
