@@ -527,7 +527,7 @@
     // 여기로 한 번 더 흘려보내 주므로, 그 비숍부터 지켜보게 된다.
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'b') return;
-      sched(G, side, 'B3c', E.untilMyTurns(G, 1), { watchId: ctx.mover.id });
+      sched(G, side, 'B3c', E.untilMyTurns(G, 2), { watchId: ctx.mover.id });
     },
     async onSched(G, side, api, e) {
       const alive = E.piecesOf(G, side).some(i => G.bd[i].id === e.watchId);

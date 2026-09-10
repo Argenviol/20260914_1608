@@ -225,10 +225,20 @@
 
   /* 도약(나이트)처럼 '어떻게 간 건지' 가 안 보이는 수만 경로를 그린다.
      미끄러지는 기물은 사이 칸이 뻔하므로 그리지 않는다. */
+  /* 보통 체스대로 움직인 수까지 경로를 그리면 오히려 어수선하다.
+     증강 때문에 '평소와 다르게' 간 수만 그린다. */
+  function isNormalMove(type, from, to) {
+    const [r0, c0] = E.rc(from), [r1, c1] = E.rc(to);
+    const dr = Math.abs(r1 - r0), dc = Math.abs(c1 - c0);
+    if (type === 'n') return (dr === 2 && dc === 1) || (dr === 1 && dc === 2);
+    return false;                       // 나이트 말고는 도약하지 않는다
+  }
+
   function leapHint(from, to) {
     const g = G();
     const p = g.bd[from];
-    if (!p || p.type !== 'n') return null;
+    if (!p) return null;
+    if (isNormalMove(p.type, from, to)) return null;   // 평범한 나이트 수 → 안 그림
     const steps = E.leapPath(from, to);
     return steps.length ? { steps, from, to } : null;
   }
@@ -244,6 +254,7 @@
   // 둔 뒤에 잠깐 보여 준다 (상대 화면에서도 같은 경로가 뜬다)
   function showPathFor(lm, ms) {
     if (!lm || !lm.path || !lm.path.length) return false;
+    if (isNormalMove(lm.type, lm.from, lm.to)) return false;   // 평범한 수는 안 그린다
     clearTimeout(pathTimer);
     // pinned — 방금 둔 수를 보여 주는 중이다. 마우스가 판 위를 스쳐도 지우지 않는다.
     pathHint = { steps: lm.path, from: lm.from, to: lm.to, pinned: true };
