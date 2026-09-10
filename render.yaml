@@ -8,7 +8,7 @@ services:
     runtime: python
     region: singapore          # 한국에서 가장 가깝다. 실시간 대전이라 지연이 곧 체감이다.
     plan: free
-    branch: 김준영_20260909_1719
+    branch: 김준영_20260910_1740
     buildCommand: pip install -r requirements.txt
     startCommand: python server/relay.py
     healthCheckPath: /healthz
