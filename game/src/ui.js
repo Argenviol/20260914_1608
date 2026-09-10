@@ -31,6 +31,7 @@
   let drag = null;                    // {from, ghost, moved, startX, startY}
   let review = null;                  // 지난 국면을 보는 중이면 스냅샷 객체
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
+  let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
   let pathTimer = null;
   let modalDepth = 0;
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
@@ -120,6 +121,11 @@
       if (lm && (lm.from === i || lm.to === i)) sq.classList.add('last');
       if (i === sel) sq.classList.add('sel');
       if (dests.includes(i)) sq.classList.add(g.bd[i] ? 'capture' : 'dest');
+      // 살펴보기 — 두는 게 아니라 사거리만 보는 중이라 다른 색으로 구분한다
+      if (peek) {
+        if (i === peek.from) sq.classList.add('peekfrom');
+        else if (peek.dests.includes(i)) sq.classList.add(g.bd[i] ? 'peekcap' : 'peek');
+      }
       if (pending && pending.squares.includes(i)) sq.classList.add('pick');
       if (flashSquares.has(i)) sq.classList.add('flash');
 
@@ -263,6 +269,28 @@
     return true;
   }
 
+  /* 아무 기물이나 눌러 '어디로 갈 수 있나' 를 본다 — 내 것이든 상대 것이든.
+     상대 차례를 가정하고 계산해야 하므로 turn 을 잠시 바꿔서 뽑는다.
+     두는 것과 헷갈리지 않게 색을 따로 쓴다. */
+  function peekMoves(i) {
+    const g = G();
+    const p = g.bd[i];
+    if (!p) return null;
+    const save = g.turn;
+    g.turn = p.color;
+    let ms = [];
+    try { ms = E.legalMoves(g, i); } catch (e) { ms = []; }
+    g.turn = save;
+    return { from: i, dests: [...new Set(ms.map(m => m.to))] };
+  }
+
+  function setPeek(p) {
+    const same = (!p && !peek) || (p && peek && peek.from === p.from);
+    if (same && p) { peek = null; renderBoard(); return; }   // 같은 기물 다시 누르면 끈다
+    peek = p;
+    renderBoard();
+  }
+
   function squareAt(x, y) {
     const n = document.elementFromPoint(x, y);
     const sq = n && n.closest ? n.closest('#board .sq') : null;
@@ -318,21 +346,31 @@
       else SFX().deny();
       return;
     }
-    if (!canControl()) return;
-
     const g = G();
-    // 선택된 상태에서 목적지를 누름 → 이동
-    if (sel >= 0 && dests.includes(i)) { tryMove(sel, i); return; }
-
     const p = g.bd[i];
+
+    // 둘 수 없는 상황(상대 차례·관전·끝난 판)에서는 '살펴보기' 로만 쓴다
+    if (!canControl()) {
+      setPeek(p ? peekMoves(i) : null);
+      return;
+    }
+
+    // 선택된 상태에서 목적지를 누름 → 이동
+    if (sel >= 0 && dests.includes(i)) { setPeek(null); tryMove(sel, i); return; }
+
     if (p && p.color === g.turn) {
+      setPeek(null);
       selectSquare(i);
       if (!dests.length) return;
       // 드래그 시작
       drag = { from: i, moved: false, startX: ev.clientX, startY: ev.clientY, type: p.type, color: p.color };
       ev.preventDefault();
+    } else if (p) {
+      // 내 차례여도 상대 기물을 누르면 그 기물의 사거리를 보여 준다
+      sel = -1; dests = [];
+      setPeek(peekMoves(i));
     } else {
-      sel = -1; dests = []; renderBoard();
+      sel = -1; dests = []; setPeek(null);
     }
   }
 
@@ -420,18 +458,27 @@
     nm.appendChild(el('span', 'stripwho', who.title));
     box.appendChild(nm);
 
+    /* 처치 진행 — 예전에는 막대 하나에 '다음 N처치' 글자만 있어서
+       1·3·6·11 이 어디쯤인지 눈에 안 들어왔다. 눈금을 직접 찍고 숫자도 같이 쓴다. */
     const thr = gm.nextThreshold(g, side);
     const prog = el('div', 'stripprog');
     prog.appendChild(el('span', 'killn', '처치 ' + g.kills[side]));
-    const bar = el('div', 'bar'), fill = el('div', 'fill');
-    if (thr === null) fill.style.width = '100%';
-    else {
-      const prevT = g.tierIdx[side] === 0 ? 0 : global.TIERS[g.tierIdx[side] - 1];
-      fill.style.width = Math.max(0, Math.min(100,
-        ((g.kills[side] - prevT) / Math.max(1, thr - prevT)) * 100)) + '%';
+
+    const track = el('div', 'kiltrack');
+    const maxT = global.TIERS[global.TIERS.length - 1];
+    const fill = el('div', 'kilfill');
+    fill.style.width = Math.min(100, (g.kills[side] / maxT) * 100) + '%';
+    track.appendChild(fill);
+    for (const t of global.TIERS) {
+      const done = g.kills[side] >= t;
+      const next = thr === t;
+      const pip = el('span', 'kilpip' + (done ? ' done' : '') + (next ? ' next' : ''));
+      pip.style.left = (t / maxT) * 100 + '%';
+      pip.appendChild(el('i', null, String(t)));
+      pip.title = done ? `${t}처치 달성` : `${t}처치까지 ${t - g.kills[side]}개`;
+      track.appendChild(pip);
     }
-    bar.appendChild(fill);
-    prog.appendChild(bar);
+    prog.appendChild(track);
     prog.appendChild(el('span', 'killsub',
       thr === null ? '완료' : '다음 ' + Math.max(0, thr - g.kills[side])));
     box.appendChild(prog);
@@ -458,10 +505,32 @@
     ac.onclick = () => { setTab('aug'); SFX().pick(); };
     box.appendChild(ac);
 
+    /* 이 진영이 잡은 기물들. grave[색] 은 '그 색이 잃은 기물' 이므로 상대 무덤을 본다.
+       값이 큰 것부터 늘어놓아야 한눈에 이득을 가늠할 수 있다. */
+    const taken = g.grave[E.other(side)].slice()
+      .sort((a, b) => (E.VALUE[b] || 0) - (E.VALUE[a] || 0));
+    const clockBox = el('div', 'clockbox');
+    const tk = el('div', 'taken' + (taken.length ? '' : ' none'));
+    if (taken.length) {
+      for (const t of taken) {
+        const gl = el('span', 'tkpc ' + (side === 'w' ? 'bp' : 'wp'), GLYPH[t]);
+        gl.title = E.KO[t];
+        tk.appendChild(gl);
+      }
+      const adv = taken.reduce((n, t) => n + (E.VALUE[t] || 0), 0)
+        - g.grave[side].reduce((n, t) => n + (E.VALUE[t] || 0), 0);
+      if (adv > 0) tk.appendChild(el('span', 'tkadv', '+' + adv));
+      tk.title = '잡은 기물';
+    } else {
+      tk.textContent = '잡은 기물 없음';
+    }
+    clockBox.appendChild(tk);
+
     const ck = el('div', 'clock' + (active ? ' running' : ''));
     ck.dataset.side = side;
     ck.textContent = fmtClock(gm.clockRemain(side));
-    box.appendChild(ck);
+    clockBox.appendChild(ck);
+    box.appendChild(clockBox);
 
     container.appendChild(box);
   }
@@ -1530,7 +1599,7 @@
       reveal: (id) => gm.revealAug(id),
       grant: (s, id) => gm.grantAug(s, id),
     };
-    gm.onUpdate = (kind) => { sel = -1; dests = []; soundForUpdate(kind); render(); };
+    gm.onUpdate = (kind) => { sel = -1; dests = []; peek = null; soundForUpdate(kind); render(); };
 
     const board = $('#board');
     board.addEventListener('pointerdown', onPointerDown);

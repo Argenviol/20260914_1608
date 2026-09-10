@@ -1228,6 +1228,63 @@ body.reviewing #turnbar { display: none; }
   border: 1px solid var(--wds-status-negative);
 }
 
+/* ── 처치 진행 눈금 ──
+   막대 하나에 글자만 있으면 1·3·6·11 이 어디쯤인지 안 보인다. 눈금을 직접 찍는다. */
+.kiltrack {
+  position: relative; flex: 1 1 auto; min-width: 90px;
+  height: 6px; background: var(--wds-fill-normal);
+  border-radius: var(--wds-radius-full); margin: 9px 0 11px;
+}
+.kilfill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--wds-primary-normal); border-radius: var(--wds-radius-full);
+  transition: width .35s;
+}
+.kilpip {
+  position: absolute; top: 50%; width: 9px; height: 9px; margin-left: -4.5px;
+  transform: translateY(-50%); border-radius: 50%;
+  background: var(--wds-background-elevated-normal);
+  border: 2px solid var(--wds-line-normal-normal);
+}
+.kilpip i {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  font-style: normal; font-size: 9px; font-weight: 700; line-height: 1;
+  color: var(--wds-label-assistive); white-space: nowrap;
+}
+.kilpip.done { background: var(--wds-primary-normal); border-color: var(--wds-primary-normal); }
+.kilpip.done i { color: var(--wds-primary-normal); }
+.kilpip.next { border-color: var(--wds-status-cautionary); }
+.kilpip.next i { color: var(--wds-status-cautionary); }
+
+/* ── 잡은 기물 (시계 바로 위) ── */
+.clockbox { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+.taken {
+  display: flex; align-items: center; gap: 1px;
+  font-size: 15px; line-height: 1; max-width: 190px; flex-wrap: wrap; justify-content: flex-end;
+}
+.taken.none { font-size: var(--wds-caption-size); color: var(--wds-label-assistive); }
+.tkpc.wp { color: var(--piece-white); text-shadow: 0 0 1px var(--piece-white-edge); }
+.tkpc.bp { color: var(--piece-black); text-shadow: 0 0 1px var(--piece-black-edge); }
+.tkadv {
+  font-size: var(--wds-caption-size); font-weight: 800;
+  color: var(--wds-status-positive); margin-left: var(--wds-space-4);
+}
+
+/* ── 살펴보기 — 둘 수는 없고 사거리만 보는 중 ──
+   '둘 수 있는 칸'(primary 파랑)과 헷갈리면 안 되므로 다른 색을 쓴다.
+   status 색은 뜻이 있으니 피하고, accent 램프의 보라를 쓴다. */
+.sq.peek::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 26%; height: 26%; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--wds-cat-2); opacity: .55; pointer-events: none;
+}
+.sq.peekcap { box-shadow: inset 0 0 0 3px var(--wds-cat-2); }
+.sq.peekfrom {
+  box-shadow: inset 0 0 0 3px var(--wds-cat-2);
+  background-image: radial-gradient(circle at center,
+    color-mix(in srgb, var(--wds-cat-2) 26%, transparent) 0%, transparent 62%);
+}
+
 /* ═══════════════ 도약 경로 ═══════════════ */
 /* 나이트처럼 건너뛰는 수는 어떻게 간 것인지가 안 보인다.
    지나간 칸에 순번을 찍어 두는 쪽도 상대도 같은 길을 보게 한다. */
