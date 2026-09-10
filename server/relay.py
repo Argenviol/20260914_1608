@@ -29,10 +29,109 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", "game"))
 PORT = int(os.environ.get("PORT", "8788"))
+
+# ── 대국 통계 (수퍼베이스) ──
+# 키는 서버에만 둔다. 정적 사이트라 브라우저에 넣으면 누구나 볼 수 있다.
+# 둘 다 비어 있으면 통계는 조용히 버린다 — 로컬에서 돌릴 때 오류가 나면 안 된다.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+STAT_MAX_BODY = 64 * 1024      # 한 번에 받는 최대 크기
+STAT_MAX_PLAYS = 4
+STAT_MAX_PICKS = 40
+STAT_RATE_N = 40               # IP 당
+STAT_RATE_SEC = 300            # 이 시간 안에
+_stat_hits = {}
+_stat_lock = threading.Lock()
+
+# service_role 키는 RLS 를 무시한다. 그러니 '아는 칸' 만 골라 담는다 —
+# 브라우저가 보낸 걸 그대로 넘기면 아무 열에나 아무거나 쓸 수 있게 된다.
+# (이름, 종류, 최대길이) — 종류: s 글자, i 정수, b 참거짓, a 글자배열, o 객체
+PLAY_COLS = [
+    ("id", "s", 40), ("client_id", "s", 40), ("app_version", "s", 20),
+    ("mode", "s", 10), ("difficulty", "s", 10), ("tc", "s", 20), ("room", "s", 10),
+    ("side", "s", 1), ("is_ai", "b", 0), ("outcome", "s", 10), ("reason", "s", 200),
+    ("moves", "i", 0), ("plies", "i", 0), ("duration_ms", "i", 0),
+    ("kills", "i", 0), ("opp_kills", "i", 0), ("tier_reached", "i", 0),
+    ("augs", "a", 24), ("piece_moves", "o", 0), ("piece_kills", "o", 0),
+]
+PICK_COLS = [
+    ("id", "s", 40), ("play_id", "s", 40), ("ply", "i", 0), ("tier", "i", 0),
+    ("piece", "s", 10), ("offered", "a", 8), ("blocked", "a", 8),
+    ("chosen", "s", 10), ("think_ms", "i", 0), ("auto", "b", 0), ("is_ai", "b", 0),
+]
+
+
+def clean_row(row, cols):
+    """정해 둔 칸만, 정해 둔 모양으로 옮겨 담는다."""
+    if not isinstance(row, dict):
+        return None
+    out = {}
+    for name, kind, cap in cols:
+        v = row.get(name)
+        if v is None:
+            out[name] = None
+        elif kind == "s":
+            out[name] = str(v)[:cap] if isinstance(v, str) else None
+        elif kind == "i":
+            out[name] = max(-10 ** 9, min(10 ** 9, int(v))) if isinstance(v, (int, float)) else None
+        elif kind == "b":
+            out[name] = bool(v)
+        elif kind == "a":
+            out[name] = [str(x)[:20] for x in v[:cap]] if isinstance(v, list) else []
+        elif kind == "o":
+            out[name] = ({str(k)[:4]: int(x) for k, x in list(v.items())[:16]
+                          if isinstance(x, (int, float))} if isinstance(v, dict) else {})
+    return out
+
+
+def stat_allowed(ip):
+    now = time.time()
+    with _stat_lock:
+        hits = [t for t in _stat_hits.get(ip, []) if now - t < STAT_RATE_SEC]
+        if len(hits) >= STAT_RATE_N:
+            _stat_hits[ip] = hits
+            return False
+        hits.append(now)
+        _stat_hits[ip] = hits
+        if len(_stat_hits) > 5000:      # 오래된 것 청소
+            for k in [k for k, v in _stat_hits.items() if not v or now - v[-1] > STAT_RATE_SEC]:
+                _stat_hits.pop(k, None)
+    return True
+
+
+def supabase_insert(table, rows):
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/{table}",
+        data=json.dumps(rows).encode("utf-8"),
+        headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": "Bearer " + SUPABASE_KEY,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=8) as r:
+        r.read()
+
+
+def stat_forward(plays, picks):
+    """응답을 이미 보낸 뒤 따로 돈다 — 수퍼베이스가 느려도 게임이 기다리지 않게."""
+    try:
+        if plays:
+            supabase_insert("plays", plays)
+        if picks:
+            supabase_insert("aug_picks", picks)
+    except Exception as e:
+        # 통계 때문에 서버가 시끄러워지면 안 된다. 한 줄만 남긴다.
+        print("[stat] 전송 실패:", e, flush=True)
+
 
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -352,6 +451,10 @@ class Handler(socketserver.StreamRequestHandler):
                 self.respond(200, b"muje-chess ok", "text/plain; charset=utf-8")
                 return
 
+            if method == "POST" and path.split("?")[0] == "/api/stat":
+                self.do_stat(headers)
+                return
+
             if method not in ("GET", "HEAD"):
                 self.respond(405, b"method not allowed", "text/plain; charset=utf-8")
                 return
@@ -359,6 +462,39 @@ class Handler(socketserver.StreamRequestHandler):
             self.do_static(path, head_only=(method == "HEAD"))
         except (OSError, socket.timeout):
             pass
+
+    # ── 대국 통계 ──
+    def do_stat(self, headers):
+        """받아서 걸러 낸 뒤 수퍼베이스로 넘긴다.
+
+        보내는 쪽(브라우저)은 답을 안 기다린다. 그래서 무슨 일이 있어도 204 만 준다 —
+        통계가 안 되는 것 때문에 게임 화면에 오류가 뜨면 안 된다."""
+        try:
+            n = int(headers.get("content-length", "0"))
+        except ValueError:
+            n = 0
+        body = self.rfile.read(n) if 0 < n <= STAT_MAX_BODY else b""
+        self.respond(204, b"", "text/plain; charset=utf-8")
+
+        if not body or not SUPABASE_URL or not SUPABASE_KEY:
+            return
+        ip = self.client_address[0]
+        if not stat_allowed(ip):
+            return
+        try:
+            m = json.loads(body.decode("utf-8"))
+        except Exception:
+            return
+        if not isinstance(m, dict):
+            return
+
+        plays = [clean_row(r, PLAY_COLS) for r in (m.get("plays") or [])[:STAT_MAX_PLAYS]]
+        picks = [clean_row(r, PICK_COLS) for r in (m.get("picks") or [])[:STAT_MAX_PICKS]]
+        plays = [r for r in plays if r and r.get("id")]
+        picks = [r for r in picks if r and r.get("id") and r.get("play_id")]
+        if not plays:
+            return
+        threading.Thread(target=stat_forward, args=(plays, picks), daemon=True).start()
 
     # ── 정적 파일 ──
     def do_static(self, path, head_only=False):
@@ -380,7 +516,7 @@ class Handler(socketserver.StreamRequestHandler):
                      extra={"Cache-Control": cache, "Content-Length": str(len(body))})
 
     def respond(self, code, body: bytes, ctype: str, extra=None):
-        reason = {200: "OK", 403: "Forbidden", 404: "Not Found",
+        reason = {200: "OK", 204: "No Content", 403: "Forbidden", 404: "Not Found",
                   405: "Method Not Allowed", 400: "Bad Request"}.get(code, "OK")
         head = [f"HTTP/1.1 {code} {reason}", f"Content-Type: {ctype}"]
         fields = {"Content-Length": str(len(body)), "Connection": "close"}

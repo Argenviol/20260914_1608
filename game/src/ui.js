@@ -1006,7 +1006,7 @@
         if (done || !pickable.length) { stopTimer(); return; }
         const r = pickable[(Math.random() * pickable.length) | 0];
         toast('시간이 다 되어 무작위로 골랐습니다 — ' + r.aug.id);
-        finish(r.aug.id);
+        finish(r.aug.id, true);
       }
 
       tick = setInterval(() => {
@@ -1041,7 +1041,13 @@
       };
 
       function close() { stopTimer(); closeOverlay(); backBar.remove(); }
-      function finish(id) { if (done) return; done = true; close(); res(id); }
+      function finish(id, auto) {
+        if (done) return;
+        done = true;
+        // 얼마나 고민했는지. 판 보기로 멈춰 둔 시간은 deadline 이 밀리므로 자연히 빠진다.
+        if (global.Stats) global.Stats.pickMeta(LIMIT - Math.max(0, deadline - Date.now()), !!auto);
+        close(); res(id);
+      }
     });
   }
 
@@ -1177,6 +1183,7 @@
           ? (result.winner === gm.mySide ? 'win' : 'lose')
           : (result.winner === 'w' ? 'white' : 'black');
     }
+    if (global.Stats) global.Stats.end(g, gm, result);
     saveRecord({
       at: Date.now(), mode: gm.mode,
       difficulty: gm.mode === 'ai' ? gm.difficulty : null,
@@ -1750,6 +1757,14 @@
     setTab('aug');
     SFX().unlock();
     Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc, mySide: opts.mySide || 'w' });
+    if (global.Stats) {
+      global.Stats.begin({
+        mode, difficulty: mode === 'ai' ? difficulty : null,
+        tc: tc ? tc.label : null,
+        room: mode === 'online' ? global.Net.code : null,
+        mySide: opts.mySide || 'w',
+      });
+    }
     // 2인 대전·온라인에서는 난이도가 의미 없다
     $('#g-diff').style.display = mode === 'ai' ? '' : 'none';
     $('#restart').textContent = mode === 'online' ? '재대국 요청' : '다시 시작';
@@ -1923,6 +1938,21 @@
     };
     $('#theme').onclick = toggleTheme;
     $('#h-theme').onclick = toggleTheme;
+
+    /* 익명 통계 — 기본은 켬. 무엇이 나가는지 알 수 있게 메인에 스위치를 둔다.
+       사람에 대한 건 기기마다 만든 임의의 id 말고 아무것도 안 보낸다. */
+    const sb = $('#h-stats');
+    if (sb && global.Stats) {
+      const syncStats = () => {
+        const on = global.Stats.enabled();
+        sb.textContent = (on ? '📊' : '🚫') + ' 통계 ' + (on ? '켬' : '끔');
+        sb.title = on
+          ? '익명 대국 통계를 보내는 중 — 승패·수·고른 증강만. 누르면 끕니다.'
+          : '통계를 안 보내는 중. 누르면 켭니다.';
+      };
+      sb.onclick = () => { global.Stats.setEnabled(!global.Stats.enabled()); syncStats(); SFX().pick(); };
+      syncStats();
+    }
 
     // 진행 기록 패널
     // 오른쪽 패널 탭

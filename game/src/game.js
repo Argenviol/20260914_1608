@@ -228,6 +228,12 @@
             round: r + 1, rounds, byKo,
           });
         }
+        if (global.Stats) {
+          global.Stats.picked({
+            side, ply: G.ply, tier, piece: cell.ko,
+            offer: cell.offer, chosen: chosenId, isAI,
+          });
+        }
         if (chosenId) await grantAug(side, chosenId, capCtx);
       }
     }
@@ -282,6 +288,7 @@
       // 도약이면 지나간 칸. 상대 화면에서도 같은 경로를 보여 주려고 판에 남긴다.
       path: moverType === 'n' ? E.leapPath(from, move.to) : [],
     };
+    if (global.Stats) global.Stats.moved(side, moverType, victim ? victim.type : null);
 
     // 처치 처리
     if (victim) {

@@ -12,3 +12,11 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python server/relay.py
     healthCheckPath: /healthz
+    envVars:
+      # 대국 통계를 수퍼베이스에 적을 때 쓴다. 값은 여기 적지 않고
+      # 렌더 대시보드의 Environment 에서 넣는다 (sync: false 가 그 뜻이다).
+      # 둘 다 비어 있으면 통계는 조용히 버려진다 — 게임은 그대로 돌아간다.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
