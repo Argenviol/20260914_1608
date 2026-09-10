@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무제체스</title>
-<link rel="stylesheet" href="wds-tokens.css?v=1789024392">
-<link rel="stylesheet" href="style.css?v=1789024392">
+<link rel="stylesheet" href="wds-tokens.css?v=1789025343">
+<link rel="stylesheet" href="style.css?v=1789025343">
 </head>
 <body>
 
@@ -59,8 +59,22 @@
               <div class="mdesc">방 코드를 주고받아 각자 집에서 둡니다</div>
             </div>
           </div>
-          <div class="pvpnote">
-            비밀 증강은 상대에게 보이지 않습니다. 새로고침해도 두던 자리로 돌아옵니다.
+          <div class="onlineopt">
+            <label class="fld">제한시간
+              <select id="o-tc">
+                <option value="none">무제한</option>
+                <option value="3+2">3분 + 2초</option>
+                <option value="5+3">5분 + 3초</option>
+                <option value="10+5" selected>10분 + 5초</option>
+                <option value="20+10">20분 + 10초</option>
+              </select>
+            </label>
+            <div class="colorpick" id="o-color">
+              <span class="fldlabel">내 색</span>
+              <button data-c="w" title="백으로 둡니다">♙ 백</button>
+              <button data-c="b" title="흑으로 둡니다">♟ 흑</button>
+              <button data-c="r" class="on" title="시작할 때 무작위로 정합니다">? 랜덤</button>
+            </div>
           </div>
           <button class="startbtn" id="h-host">방 만들기</button>
           <div class="joinrow">
@@ -136,6 +150,7 @@
     <button id="flip" class="iconbtn" title="판 뒤집기">⇅</button>
     <button id="codex" class="iconbtn" title="증강 도감">📖</button>
     <button id="rules" class="iconbtn" title="규칙 · 용어">❓</button>
+    <button id="abort" class="nav ghost small">중단</button>
     <button id="resign" class="nav danger">항복</button>
     <button id="restart" class="nav">다시 시작</button>
   </div>
@@ -183,13 +198,13 @@
 
 <div id="dragghost"></div>
 
-<script src="src/data.js?v=1789024392"></script>
-<script src="src/sfx.js?v=1789024392"></script>
-<script src="src/engine.js?v=1789024392"></script>
-<script src="src/augments.js?v=1789024392"></script>
-<script src="src/ai.js?v=1789024392"></script>
-<script src="src/net.js?v=1789024392"></script>
-<script src="src/game.js?v=1789024392"></script>
-<script src="src/ui.js?v=1789024392"></script>
+<script src="src/data.js?v=1789025343"></script>
+<script src="src/sfx.js?v=1789025343"></script>
+<script src="src/engine.js?v=1789025343"></script>
+<script src="src/augments.js?v=1789025343"></script>
+<script src="src/ai.js?v=1789025343"></script>
+<script src="src/net.js?v=1789025343"></script>
+<script src="src/game.js?v=1789025343"></script>
+<script src="src/ui.js?v=1789025343"></script>
 </body>
 </html>

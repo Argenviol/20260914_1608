@@ -29,6 +29,7 @@
   Net.peerOnline = false;
   Net.code = null;
   Net.side = null;                  // 'w' | 'b'
+  Net.isHost = false;               // 방을 만든 쪽인가. 색과는 별개다 (방장이 흑을 고를 수 있다)
   Net.onEvent = null;               // (type, payload) => void  — ui.js 가 붙는다
 
   function emit(type, payload) { if (Net.onEvent) Net.onEvent(type, payload); }
@@ -89,7 +90,7 @@
   Net.disconnect = function () {
     wantOpen = false;
     clearTimeout(retryTimer);
-    Net.code = null; Net.side = null; Net.peerOnline = false;
+    Net.code = null; Net.side = null; Net.isHost = false; Net.peerOnline = false;
     resetMasks();
     if (ws) { try { ws.close(); } catch (e) { } ws = null; }
   };
@@ -99,12 +100,14 @@
     return false;
   }
 
-  Net.createRoom = function (tc) { Net.connect(); waitOpen(() => raw({ t: 'create', tc })); };
+  Net.createRoom = function (tc, side) { Net.connect(); waitOpen(() => raw({ t: 'create', tc, side })); };
   Net.joinRoom = function (code, tc) { Net.connect(); waitOpen(() => raw({ t: 'join', code, tc })); };
   Net.resign = function () { raw({ t: 'resign' }); };
   // 시계 멈춤/재개처럼 판을 바꾸지 않는 짧은 신호
   Net.note = function (kind, clock) { raw({ t: 'note', kind, clock }); };
   Net.askRematch = function () { raw({ t: 'rematch' }); };
+  Net.abort = function () { raw({ t: 'abort' }); };
+  Net.chat = function (text, emote) { raw({ t: 'chat', text, emote }); };
   Net.acceptRematch = function () { raw({ t: 'rematchOk' }); };
 
   function waitOpen(fn, tries) {
@@ -116,9 +119,10 @@
 
   function receive(m) {
     switch (m.t) {
-      case 'created': Net.code = m.code; Net.side = m.side; emit('created', m); return;
+      case 'created': Net.code = m.code; Net.side = m.side; Net.isHost = true; emit('created', m); return;
       case 'joined':
         Net.code = m.code; Net.side = m.side;
+        if (!m.resumed) Net.isHost = false;
         if (m.resumed) loadVault();
         emit('joined', m);
         return;
@@ -128,6 +132,8 @@
       case 'resign': emit('resign', m); return;
       case 'rematch': emit('rematch', m); return;
       case 'rematchOk': emit('rematchOk', m); return;
+      case 'abort': emit('abort', m); return;
+      case 'chat': emit('chat', m); return;
       case 'error': emit('error', m); return;
     }
   }

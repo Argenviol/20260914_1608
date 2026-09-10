@@ -930,6 +930,19 @@
     const box = $('#endfx');
     box.innerHTML = '';
 
+    // 중단은 승패가 아니다 — 전적에 남기지 않고, 연출도 조용히 한다
+    if (result.aborted) {
+      box.className = 'show draw';
+      const c = el('div', 'endcard');
+      c.appendChild(el('div', 'endtitle', '대국 중단'));
+      c.appendChild(el('div', 'endsub', result.reason));
+      const home = el('button', 'nav', '메인으로');
+      home.onclick = () => { if (Game().mode === 'online') leaveOnline(); renderHomeRecords(); showHome(); };
+      c.appendChild(home);
+      box.appendChild(c);
+      return;
+    }
+
     // 전적 저장
     let outcome = 'draw';
     if (result.winner) {
@@ -1301,7 +1314,7 @@
 
         case 'created':
           saveRoom();
-          showLobby(m.code);
+          showLobby(m.code, `상대를 기다리는 중\u2026 \u00b7 나는 ${m.side === 'w' ? '백' : '흑'}입니다`);
           return;
 
         case 'joined':
@@ -1321,13 +1334,14 @@
           if (m.online) {
             netBanner('상대가 들어왔습니다', 'ok');
             // 호스트는 상대가 들어온 시점에 판을 연다
-            if (Net.side === 'w' && Game().mode !== 'online') {
+            // 판을 여는 건 '방을 만든 쪽'. 색과는 별개다 (방장이 흑을 고를 수 있다)
+            if (Net.isHost && Game().mode !== 'online') {
               hideLobby();
-              startOnline('w', m.tc || pendingTC, true);
+              startOnline(Net.side, m.tc || pendingTC, true);
             } else {
               hideLobby();
             }
-          } else if (inOnlineGame()) {
+          } else if (inOnlineGame() && !(G() && G().result)) {   // 이미 끝난 판이면 알리지 않는다
             netBanner('상대의 연결이 끊겼습니다 — 돌아오기를 기다리는 중\u2026', 'warn', true);
           }
           return;
@@ -1351,6 +1365,12 @@
           Game().finishOnline(Net.side, '상대가 항복했습니다');
           return;
 
+        case 'abort':
+          // 승패를 남기지 않는다. 항복과 다르다.
+          netBanner('상대가 대국을 중단했습니다', 'warn', true);
+          Game().abortGame('상대가 대국을 중단했습니다');
+          return;
+
         case 'rematch':
           if (!inOnlineGame()) return;
           rematchPending = true;
@@ -1359,7 +1379,7 @@
           return;
 
         case 'rematchOk':
-          startOnline(Net.side, Game().timeControl, Net.side === 'w');
+          startOnline(Net.side, Game().timeControl, Net.isHost);
           return;
 
         case 'error':
@@ -1378,7 +1398,7 @@
     const list = el('div', 'optlist');
     const yes = el('button', 'opt primary'); yes.appendChild(el('div', 'optlabel', '수락'));
     const no = el('button', 'opt'); no.appendChild(el('div', 'optlabel', '거절'));
-    yes.onclick = () => { close(); global.Net.acceptRematch(); startOnline(global.Net.side, Game().timeControl, global.Net.side === 'w'); };
+    yes.onclick = () => { close(); global.Net.acceptRematch(); startOnline(global.Net.side, Game().timeControl, global.Net.isHost); };
     no.onclick = () => { close(); rematchPending = false; };
     list.appendChild(yes); list.appendChild(no);
     wrap.appendChild(list);
@@ -1387,17 +1407,25 @@
 
   let pendingTC = null;
 
+  let onlineColor = 'r';           // 'w' | 'b' | 'r'(랜덤)
+
+  function onlineTC() {
+    const sel = $('#o-tc');
+    return parseTC(sel ? sel.value : $('#h-tc').value);
+  }
+
   function hostRoom() {
-    pendingTC = parseTC($('#h-tc').value);
+    pendingTC = onlineTC();
     SFX().unlock();
-    showLobby(null, '서버를 깨우는 중입니다\u2026 (처음 한 번은 1분까지 걸릴 수 있습니다)');
-    global.Net.createRoom(pendingTC);
+    const label = onlineColor === 'w' ? '백' : onlineColor === 'b' ? '흑' : '무작위';
+    showLobby(null, `서버를 깨우는 중입니다\u2026 (처음 한 번은 1분까지 걸릴 수 있습니다) \u00b7 내 색: ${label}`);
+    global.Net.createRoom(pendingTC, onlineColor === 'r' ? null : onlineColor);
   }
 
   function joinRoom() {
     const code = ($('#h-code').value || '').toUpperCase().trim();
     if (code.length < 4) { netBanner('코드를 입력해 주세요', 'bad'); return; }
-    pendingTC = parseTC($('#h-tc').value);
+    pendingTC = onlineTC();
     SFX().unlock();
     showLobby(code, '서버를 깨우는 중입니다\u2026 (처음 한 번은 1분까지 걸릴 수 있습니다)');
     global.Net.joinRoom(code, pendingTC);
@@ -1530,6 +1558,17 @@
     });
     $('#h-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom(); });
     $('#lb-cancel').onclick = leaveOnline;
+    // 내 색 고르기 (랜덤이면 서버가 방을 열 때 정한다)
+    const cp = $('#o-color');
+    if (cp) {
+      cp.querySelectorAll('button').forEach(b => {
+        b.onclick = () => {
+          onlineColor = b.dataset.c;
+          cp.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+          SFX().pick();
+        };
+      });
+    }
     $('#lb-copy').onclick = () => {
       const c = $('#lb-code').textContent;
       if (navigator.clipboard) navigator.clipboard.writeText(c).then(() => toast('코드를 복사했습니다: ' + c));
@@ -1559,6 +1598,16 @@
         return;
       }
       startGame(gm.mode);
+    };
+
+    $('#abort').onclick = () => {
+      const g = G();
+      if (!g) return;
+      if (!window.confirm('이 대국을 중단할까요? 승패는 남지 않습니다.')) return;
+      if (Game().mode === 'online') { global.Net.abort(); }
+      Game().abortGame('대국을 중단했습니다');
+      leaveOnline();
+      renderHomeRecords(); showHome();
     };
 
     $('#resign').onclick = () => {

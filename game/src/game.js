@@ -427,6 +427,15 @@
     return loser;
   };
 
+  /* 대국 중단 — 승패를 남기지 않고 판을 끝낸다. 항복(패배 기록)과 다르다. */
+  Game.abortGame = function (reason) {
+    const G = Game.G;
+    if (!G || G.result) return;
+    G.result = { winner: null, reason: reason || '대국을 중단했습니다', aborted: true };
+    pushLog(reason || '대국을 중단했습니다');
+    if (Game.onUpdate) Game.onUpdate('move');
+  };
+
   // 상대가 항복했거나 연결이 끊겨 내가 이기는 경우
   Game.finishOnline = function (winner, reason) {
     const G = Game.G;

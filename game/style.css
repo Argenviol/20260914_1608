@@ -1152,6 +1152,29 @@ body.reviewing #turnbar { display: none; }
 .modecard.online .joinrow input:focus { outline: none; border-color: var(--wds-primary-normal); }
 .modecard.online .joinrow .startbtn { flex: 0 0 auto; margin-top: 0; padding: var(--wds-space-12) var(--wds-space-20); }
 
+/* ── 온라인 방 설정 (시간 · 내 색) ── */
+.onlineopt {
+  display: flex; flex-direction: column; gap: var(--wds-space-8);
+  background: var(--wds-background-normal-alternative);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-10) var(--wds-space-12);
+  margin-bottom: var(--wds-space-12);
+}
+.onlineopt .fld { display: flex; align-items: center; justify-content: space-between; gap: var(--wds-space-8); }
+.fldlabel { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); font-weight: 700; }
+.colorpick { display: flex; align-items: center; justify-content: space-between; gap: var(--wds-space-6); }
+.colorpick button {
+  flex: 1 1 0; min-width: 0;
+  background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
+  color: var(--wds-label-alternative); border-radius: var(--wds-radius-6);
+  padding: var(--wds-space-4) 0; font-size: var(--wds-label2-size); font-weight: 700;
+}
+.colorpick button.on {
+  background: var(--wds-background-status-positive);
+  border-color: var(--wds-primary-normal); color: var(--wds-primary-normal);
+}
+
 /* 방 대기 화면 */
 #lobby {
   position: fixed; inset: 0; z-index: 125;

@@ -176,21 +176,24 @@ def send_to(conn, obj):
 def handle_message(conn: Conn, m: dict):
     t = m.get("t")
 
-    # 방 만들기 — 만든 사람이 백
+    # 방 만들기 — 만든 사람이 색을 고른다 (랜덤이면 여기서 정한다)
     if t == "create":
+        want = m.get("side")
+        if want not in ("w", "b"):
+            want = random.choice(("w", "b"))
         with lock:
             code = new_code()
             if not code:
                 conn.send({"t": "error", "why": "방을 만들지 못했습니다. 다시 시도해 주세요."})
                 return
             room = Room(code, m.get("tc"))
-            room.seats["w"] = conn
+            room.seats[want] = conn
             rooms[code] = room
-        conn.room, conn.side = room, "w"
-        conn.send({"t": "created", "code": code, "side": "w", "tc": room.tc})
+        conn.room, conn.side = room, want
+        conn.send({"t": "created", "code": code, "side": want, "tc": room.tc})
         return
 
-    # 참가 — 들어온 사람이 흑
+    # 참가 — 남은 자리에 앉는다 (방장이 고른 색의 반대)
     if t == "join":
         code = str(m.get("code") or "").upper().strip()
         with lock:
@@ -198,15 +201,20 @@ def handle_message(conn: Conn, m: dict):
             if not room:
                 conn.send({"t": "error", "why": "그런 방이 없습니다. 코드를 확인해 주세요."})
                 return
-            held = room.seats["b"]
-            if held is not None and held.alive:
+            free = None
+            for c in ("w", "b"):
+                held = room.seats[c]
+                if held is None or not held.alive:
+                    free = c
+                    break
+            if free is None:
                 conn.send({"t": "error", "why": "이미 두 명이 들어와 있는 방입니다."})
                 return
-            room.seats["b"] = conn
+            room.seats[free] = conn
             room.touched = time.time()
-            last, host = room.last_state, room.seats["w"]
-        conn.room, conn.side = room, "b"
-        conn.send({"t": "joined", "code": code, "side": "b", "tc": room.tc})
+            last, host = room.last_state, room.peer(free)
+        conn.room, conn.side = room, free
+        conn.send({"t": "joined", "code": code, "side": free, "tc": room.tc})
         if last:
             conn.send({"t": "state", "s": last})     # 진행 중이던 판이면 이어서
         send_to(host, {"t": "peer", "online": True})
@@ -250,10 +258,10 @@ def handle_message(conn: Conn, m: dict):
         return
 
     # 그 외(시계 신호·항복·재대국)는 그대로 흘려 보낸다
-    if t in ("note", "resign", "rematch", "rematchOk"):
+    if t in ("note", "resign", "rematch", "rematchOk", "abort", "chat"):
         with lock:
             room.touched = time.time()
-            if t in ("rematch", "rematchOk"):
+            if t in ("rematch", "rematchOk", "abort"):
                 room.last_state = None
             peer = room.peer(conn.side)
         out = dict(m)
