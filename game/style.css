@@ -1228,6 +1228,67 @@ body.reviewing #turnbar { display: none; }
   border: 1px solid var(--wds-status-negative);
 }
 
+/* ── 온라인 대화 ── */
+#tabs button.unread { color: var(--wds-primary-normal); }
+#tabs button.unread::after {
+  content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 5px;
+  border-radius: 50%; background: var(--wds-primary-normal); vertical-align: middle;
+}
+.chatlist {
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  overflow: auto; flex: 1 1 auto; min-height: 0; padding-bottom: var(--wds-space-8);
+}
+.chatrow {
+  display: flex; align-items: baseline; gap: var(--wds-space-6);
+  max-width: 88%; padding: var(--wds-space-6) var(--wds-space-10);
+  border-radius: var(--wds-radius-10); font-size: var(--wds-label1-size); line-height: 1.5;
+  word-break: break-word;
+}
+.chatrow.me {
+  align-self: flex-end; background: var(--wds-primary-normal); color: var(--wds-static-white);
+}
+.chatrow.you {
+  align-self: flex-start; background: var(--wds-background-normal-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+}
+.chatemote { font-size: 22px; line-height: 1; }
+.emotes {
+  display: flex; flex-wrap: wrap; gap: var(--wds-space-4);
+  padding: var(--wds-space-8) 0; border-top: 1px solid var(--wds-line-normal-alternative);
+}
+.emote {
+  background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-8); padding: 2px var(--wds-space-6);
+  font-size: 18px; line-height: 1.3;
+}
+.emote:hover { border-color: var(--wds-primary-normal); background: var(--wds-fill-strong); }
+.chatinput { display: flex; gap: var(--wds-space-6); }
+.chatinput input {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-8) var(--wds-space-10); font: inherit;
+}
+.chatinput input:focus { outline: none; border-color: var(--wds-primary-normal); }
+#tabpanel { display: flex; flex-direction: column; }
+
+/* ── 증강 고르는 제한시간 ── */
+.drafttimer { display: flex; align-items: center; gap: var(--wds-space-8); margin-left: auto; }
+.dtnum {
+  font-size: var(--wds-heading1-size); font-weight: 800;
+  font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right;
+  color: var(--wds-label-neutral);
+}
+.dtbar {
+  width: 96px; height: 6px; background: var(--wds-fill-normal);
+  border-radius: var(--wds-radius-full); overflow: hidden;
+}
+.dtfill { height: 100%; width: 100%; background: var(--wds-primary-normal); transition: width .1s linear; }
+/* 10초 남으면 빨강 — 이 화면에서 빨강은 '되돌릴 수 없음' 이라 여기 딱 맞는다 */
+.drafttimer.urgent .dtnum { color: var(--wds-status-negative); animation: blink .6s infinite alternate; }
+.drafttimer.urgent .dtfill { background: var(--wds-status-negative); }
+@media (prefers-reduced-motion: reduce) { .drafttimer.urgent .dtnum { animation: none; } }
+
 /* ── 처치 진행 눈금 ──
    막대 하나에 글자만 있으면 1·3·6·11 이 어디쯤인지 안 보인다. 눈금을 직접 찍는다. */
 .kiltrack {

@@ -32,6 +32,8 @@
   let review = null;                  // 지난 국면을 보는 중이면 스냅샷 객체
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
   let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
+  let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
+  let chatUnread = 0;
   let pathTimer = null;
   let modalDepth = 0;
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
@@ -601,6 +603,7 @@
 
   function setTab(t) {
     tab = t;
+    if (t === 'chat') { chatUnread = 0; }
     document.querySelectorAll('#tabs button').forEach(
       b => b.classList.toggle('on', b.dataset.tab === t));
     renderTabPanel();
@@ -632,11 +635,75 @@
     return c;
   }
 
+  /* 온라인에서만 쓰는 대화. 판을 가리지 않도록 오른쪽 탭 안에 둔다.
+     이모티콘은 한글 입력 없이 한 번에 보낼 수 있는 통로다 — 대국 중에 타자를 치는 건 부담이다. */
+  const EMOTES = ['👋', '👍', '😄', '😮', '😅', '🤔', '🔥', '😭', '🎉', '🙏'];
+
+  function pushChat(who, text, emote) {
+    chatLog.push({ who, text, emote, at: Date.now() });
+    if (chatLog.length > 200) chatLog.shift();
+    if (tab !== 'chat') { chatUnread++; syncChatTab(); }
+    if (tab === 'chat') renderTabPanel();
+    if (who === 'you') SFX().pick();
+  }
+
+  function syncChatTab() {
+    const b = $('#tab-chat');
+    if (!b) return;
+    const on = Game().mode === 'online';
+    b.hidden = !on;
+    b.textContent = chatUnread ? `대화 ${chatUnread}` : '대화';
+    b.classList.toggle('unread', chatUnread > 0);
+  }
+
+  function renderChat(box) {
+    const list = el('div', 'chatlist');
+    if (!chatLog.length) {
+      list.appendChild(el('div', 'dim', '아직 대화가 없습니다. 아래에서 보내 보세요.'));
+    }
+    for (const m of chatLog) {
+      const row = el('div', 'chatrow ' + m.who);
+      if (m.emote) row.appendChild(el('span', 'chatemote', m.emote));
+      if (m.text) row.appendChild(el('span', 'chattext', m.text));
+      list.appendChild(row);
+    }
+    box.appendChild(list);
+    list.scrollTop = list.scrollHeight;
+
+    const em = el('div', 'emotes');
+    for (const e of EMOTES) {
+      const b = el('button', 'emote', e);
+      b.onclick = () => sendChat('', e);
+      em.appendChild(b);
+    }
+    box.appendChild(em);
+
+    const row = el('div', 'chatinput');
+    const inp = el('input');
+    inp.type = 'text'; inp.maxLength = 200; inp.placeholder = '메시지 (Enter 로 보내기)';
+    const send = el('button', 'nav small', '보내기');
+    const go = () => { const t = inp.value.trim(); if (!t) return; inp.value = ''; sendChat(t, ''); };
+    send.onclick = go;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    row.appendChild(inp); row.appendChild(send);
+    box.appendChild(row);
+    setTimeout(() => inp.focus(), 0);
+  }
+
+  function sendChat(text, emote) {
+    if (Game().mode !== 'online') return;
+    if (!text && !emote) return;
+    global.Net.chat(text, emote);
+    pushChat('me', text, emote);
+  }
+
   function renderTabPanel() {
     const g = G(), gm = Game();
     const box = $('#tabpanel');
     if (!box) return;
     box.innerHTML = '';
+    syncChatTab();
+    if (tab === 'chat') { renderChat(box); return; }
 
     if (tab === 'aug') {
       const bottom = bottomSide();
@@ -858,7 +925,7 @@
           c.disabled = true;
           c.onclick = () => SFX().deny();
         } else {
-          c.onclick = () => { SFX().augment(); close(); res(a.id); };
+          c.onclick = () => { SFX().augment(); finish(a.id); };
         }
         cards.appendChild(c);
       }
@@ -869,6 +936,38 @@
       const peek = el('button', 'nav ghost', '판 보기');
       foot.appendChild(peek);
       wrap.appendChild(foot);
+
+      /* 30초 제한. 못 고르면 고를 수 있는 것 중에서 무작위로 하나 집는다.
+         (여기서 그냥 멈춰 버리면 온라인에서는 상대가 영영 기다린다) */
+      const pickable = offer.filter(o => !o.block);
+      const timerWrap = el('div', 'drafttimer');
+      const tbar = el('div', 'dtbar'), tfill = el('div', 'dtfill');
+      tbar.appendChild(tfill);
+      const tnum = el('span', 'dtnum', '30');
+      timerWrap.appendChild(tnum);
+      timerWrap.appendChild(tbar);
+      head.appendChild(timerWrap);
+
+      const LIMIT = 30000;
+      let deadline = Date.now() + LIMIT, tick = null, done = false;
+
+      function stopTimer() { if (tick) { clearInterval(tick); tick = null; } }
+
+      function onTimeUp() {
+        if (done || !pickable.length) { stopTimer(); return; }
+        const r = pickable[(Math.random() * pickable.length) | 0];
+        toast('시간이 다 되어 무작위로 골랐습니다 — ' + r.aug.id);
+        finish(r.aug.id);
+      }
+
+      tick = setInterval(() => {
+        const left = Math.max(0, deadline - Date.now());
+        const sec = Math.ceil(left / 1000);
+        tnum.textContent = String(sec);
+        tfill.style.width = (left / LIMIT * 100) + '%';
+        timerWrap.classList.toggle('urgent', left <= 10000);
+        if (left <= 0) { stopTimer(); onTimeUp(); }
+      }, 100);
 
       const closeOverlay = overlay(wrap, { wide: true });
       const ov = closeOverlay.el;
@@ -882,10 +981,18 @@
       backBar.appendChild(back);
       document.body.appendChild(backBar);
 
-      peek.onclick = () => { ov.classList.add('peeking'); backBar.classList.add('show'); SFX().pick(); };
-      back.onclick = () => { ov.classList.remove('peeking'); backBar.classList.remove('show'); SFX().pick(); };
+      let peekedAt = 0;
+      peek.onclick = () => {
+        ov.classList.add('peeking'); backBar.classList.add('show'); SFX().pick();
+        peekedAt = Date.now();                       // 판 보는 동안은 시간이 안 준다
+      };
+      back.onclick = () => {
+        ov.classList.remove('peeking'); backBar.classList.remove('show'); SFX().pick();
+        if (peekedAt) { deadline += Date.now() - peekedAt; peekedAt = 0; }
+      };
 
-      function close() { closeOverlay(); backBar.remove(); }
+      function close() { stopTimer(); closeOverlay(); backBar.remove(); }
+      function finish(id) { if (done) return; done = true; close(); res(id); }
     });
   }
 
@@ -1359,6 +1466,7 @@
 
   function startOnline(side, tc, pushInitial, resume) {
     rematchPending = false;
+    if (!resume) { chatLog = []; chatUnread = 0; }
     // 재접속이면 가면 해독표를 되살린다. 새 판이면 지운다.
     // (여기서 무조건 지우면, 방금 되살린 표를 다시 날려 내 비밀 증강을 나도 못 읽게 된다)
     if (resume) global.Net.loadVault(); else global.Net.resetMasks();
@@ -1433,6 +1541,13 @@
         case 'resign':
           Game().finishOnline(Net.side, '상대가 항복했습니다');
           return;
+
+        case 'chat': {
+          const txt = typeof m.text === 'string' ? m.text.slice(0, 200) : '';
+          const emo = typeof m.emote === 'string' ? m.emote.slice(0, 8) : '';
+          if (txt || emo) pushChat('you', txt, emo);
+          return;
+        }
 
         case 'abort':
           // 승패를 남기지 않는다. 항복과 다르다.
