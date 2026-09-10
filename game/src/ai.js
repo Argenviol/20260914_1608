@@ -408,7 +408,9 @@
       for (let i = 0; i < 64; i++) arr[i] = rnd();
       t[c][p] = arr;
     }
-    return { t, side: rnd() };
+    const ep = new Uint32Array(8);
+    for (let i = 0; i < 8; i++) ep[i] = rnd();
+    return { t, side: rnd(), ep };
   })();
 
   function hashOf(G, side) {
@@ -418,6 +420,25 @@
       const p = bd[i];
       if (p) h ^= (p.color === 'w' ? tw : tb)[p.type][i];
     }
+    if (G.ep >= 0) h ^= Z.ep[G.ep & 7];
+    return h >>> 0;
+  }
+
+  /* 매 노드마다 64칸을 다시 훑는 건 탐색에서 제일 비싼 일 중 하나였다.
+     applyRaw 가 돌려주는 되돌리기 기록에 바뀐 칸이 전부 들어 있으므로,
+     그 칸들만 XOR 해서 해시를 갱신한다. 엔진은 건드리지 않는다. */
+  function hashAfter(h, G, m, u, side) {
+    if (u.noop) return h;
+    const t = Z.t[side], ft = Z.t[side === 'w' ? 'b' : 'w'];
+    const moved = G.bd[m.to];                       // 이동 뒤의 기물 (승격했으면 바뀐 종류)
+    const fromType = u.promoFrom || moved.type;     // 떠나기 전의 종류
+    h ^= t[fromType][m.from];
+    h ^= t[moved.type][m.to];
+    if (u.cap) h ^= ft[u.cap.type][u.capSq];
+    if (u.rook) { h ^= t.r[u.rook.from]; h ^= t.r[u.rook.to]; }
+    if (u.ep >= 0) h ^= Z.ep[u.ep & 7];             // 이전 앙파상 해제
+    if (G.ep >= 0) h ^= Z.ep[G.ep & 7];             // 새 앙파상 반영
+    h ^= Z.side;
     return h >>> 0;
   }
 
@@ -458,6 +479,10 @@
     G.turn = save;
     orderMoves(G, caps, null, 0);
     for (const m of caps) {
+      // 델타 가지치기 — 잡는 기물 값을 통째로 얹어도 알파에 못 미치면 볼 필요가 없다.
+      // (증강으로 판이 뒤집히는 국면이 있어 여유를 넉넉히 둔다)
+      const vic = G.bd[m.to];
+      if (vic && !m.promo && stand + MG[vic.type] + 200 < alpha) continue;
       const u = E.applyRaw(G, m);
       const sc = -quiesce(G, E.other(side), -beta, -alpha, ply + 1);
       E.undoRaw(G, u);
@@ -468,46 +493,85 @@
     return alpha;
   }
 
-  function negamax(G, side, depth, alpha, beta, ply) {
+  const MATE = 90000;
+
+  // 이 진영이 킹·폰 말고 다른 기물을 갖고 있는가 (널무브 안전장치)
+  function hasHeavy(G, side) {
+    for (const i of E.piecesOf(G, side)) {
+      const t = G.bd[i].type;
+      if (t !== 'p' && t !== 'k') return true;
+    }
+    return false;
+  }
+
+  function inCheckFor(G, side) {
+    const save = G.turn; G.turn = side;
+    const c = E.inCheck(G, side);
+    G.turn = save;
+    return c;
+  }
+
+  function negamax(G, side, depth, alpha, beta, ply, key) {
     nodes++;
     if ((nodes & 511) === 0 && performance.now() > deadline) { aborted = true; return alpha; }
+    if (key === undefined) key = hashOf(G, side);
 
-    const key = hashOf(G, side);
     const hit = TT.get(key);
     let ttMove = null;
     if (hit) {
       ttMove = hit.move;
       if (hit.depth >= depth) {
-        if (hit.flag === 0) return hit.score;
-        if (hit.flag === 1 && hit.score > alpha) alpha = hit.score;
-        if (hit.flag === 2 && hit.score < beta) beta = hit.score;
-        if (alpha >= beta) return hit.score;
+        // 외통 점수는 '몇 수 뒤'가 붙어 있다. 저장할 때 뿌리 기준으로 펴 뒀으므로
+        // 꺼낼 때 지금 깊이를 다시 얹어 준다. 안 하면 다른 깊이에서 거리가 틀어진다.
+        let sc = hit.score;
+        if (sc > MATE - 1000) sc -= ply;
+        else if (sc < -MATE + 1000) sc += ply;
+        if (hit.flag === 0) return sc;
+        if (hit.flag === 1 && sc > alpha) alpha = sc;
+        if (hit.flag === 2 && sc < beta) beta = sc;
+        if (alpha >= beta) return sc;
       }
     }
 
     if (depth <= 0) return quiesce(G, side, alpha, beta, 0);
 
-    let ms = movesFor(G, side);
-    if (!ms.length) {
-      const save = G.turn; G.turn = side;
-      const chk = E.inCheck(G, side);
-      G.turn = save;
-      return chk ? -90000 + ply : 0;         // 체크메이트는 빠를수록 좋다
+    const inChk = inCheckFor(G, side);
+
+    /* 널무브 — 한 수를 그냥 넘겨 주고도 여전히 beta 를 넘으면,
+       이 가지는 상대에게 아무 희망이 없다고 보고 얕게 끊는다.
+       체크 중이거나 기물이 폰뿐일 때는 '넘기는 게 이득'인 국면(주그츠방)이라 건너뛴다. */
+    if (!inChk && depth >= 3 && beta < MATE - 1000 && hasHeavy(G, side)) {
+      const savedEp = G.ep;
+      G.ep = -1;
+      const R = depth >= 6 ? 3 : 2;
+      const nk = hashOf(G, E.other(side));
+      const sc = -negamax(G, E.other(side), depth - 1 - R, -beta, -beta + 1, ply + 1, nk);
+      G.ep = savedEp;
+      if (aborted) return alpha;
+      if (sc >= beta) return beta;
     }
+
+    let ms = movesFor(G, side);
+    if (!ms.length) return inChk ? -MATE + ply : 0;      // 체크메이트는 빠를수록 좋다
     ms = orderMoves(G, ms, ttMove, ply);
 
     const alpha0 = alpha;
     let best = -Infinity, bestMove = null;
     for (let i = 0; i < ms.length; i++) {
       const m = ms[i];
+      const quiet = !G.bd[m.to];
       const u = E.applyRaw(G, m);
+      const ck = hashAfter(key, G, m, u, side);
+      // 체크를 거는 수는 한 수 더 본다. 전술은 거의 여기서 나온다.
+      const ext = inCheckFor(G, E.other(side)) ? 1 : 0;
+      const nd = depth - 1 + ext;
       let sc;
-      if (i === 0) sc = -negamax(G, E.other(side), depth - 1, -beta, -alpha, ply + 1);
+      if (i === 0) sc = -negamax(G, E.other(side), nd, -beta, -alpha, ply + 1, ck);
       else {
         // 후순위 수는 축소해서 훑고, 좋으면 다시 본다
-        const red = (depth >= 3 && i >= 4 && !G.bd[m.to]) ? 1 : 0;
-        sc = -negamax(G, E.other(side), depth - 1 - red, -alpha - 1, -alpha, ply + 1);
-        if (sc > alpha && sc < beta) sc = -negamax(G, E.other(side), depth - 1, -beta, -alpha, ply + 1);
+        const red = (!ext && depth >= 3 && i >= 4 && quiet) ? (i >= 10 ? 2 : 1) : 0;
+        sc = -negamax(G, E.other(side), nd - red, -alpha - 1, -alpha, ply + 1, ck);
+        if (sc > alpha && sc < beta) sc = -negamax(G, E.other(side), nd, -beta, -alpha, ply + 1, ck);
       }
       E.undoRaw(G, u);
       if (aborted) return best === -Infinity ? alpha : best;
@@ -515,7 +579,7 @@
       if (sc > best) { best = sc; bestMove = m; }
       if (best > alpha) alpha = best;
       if (alpha >= beta) {
-        if (!G.bd[m.to]) {
+        if (quiet) {
           killers[ply] = killers[ply] || [];
           killers[ply][1] = killers[ply][0];
           killers[ply][0] = { from: m.from, to: m.to };
@@ -526,7 +590,13 @@
     }
 
     const flag = best <= alpha0 ? 2 : (best >= beta ? 1 : 0);
-    if (TT.size < 400000) TT.set(key, { depth, score: best, flag, move: bestMove });
+    if (TT.size < 400000) {
+      // 뿌리 기준으로 펴서 저장한다 (꺼낼 때 다시 ply 를 얹는다)
+      let st = best;
+      if (st > MATE - 1000) st += ply;
+      else if (st < -MATE + 1000) st -= ply;
+      TT.set(key, { depth, score: st, flag, move: bestMove });
+    }
     return best;
   }
 
@@ -595,9 +665,22 @@
       const ordered = orderMoves(G, ms.slice(), best, 0);
       const scored = [];
       let localBest = null, localScore = -Infinity;
+      /* 루트도 좁은 창으로 훑는다. 전에는 모든 수를 전체 창으로 봐서 알파베타를 통째로 버렸다.
+         다만 잡음 난이도는 '최선에서 L.noise 안쪽'인 수들 중에서 뽑기를 하므로,
+         그 범위의 수는 점수가 정확해야 한다. → 창의 기준선을 딱 그만큼 내려 둔다.
+         그보다 나쁜 수는 어차피 잡음으로도 뽑히지 않으니 경계값만 알면 충분하다.
+         잡음이 0(고급)이면 이 식은 그냥 보통의 PVS 가 된다. */
+      const margin = L.noise || 0;
       for (const m of ordered) {
         const u = E.applyRaw(G, m);
-        const sc = -negamax(G, E.other(side), d - 1, -Infinity, Infinity, 1);
+        let sc;
+        if (localBest !== null) {
+          const a = localScore - margin;
+          sc = -negamax(G, E.other(side), d - 1, -a - 1, -a, 1);
+          if (sc > a && !aborted) sc = -negamax(G, E.other(side), d - 1, -Infinity, Infinity, 1);
+        } else {
+          sc = -negamax(G, E.other(side), d - 1, -Infinity, Infinity, 1);
+        }
         E.undoRaw(G, u);
         if (aborted) break;
         scored.push({ m, sc });

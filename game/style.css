@@ -29,6 +29,10 @@
   --piece-white-edge: var(--wds-coolNeutral-50);
   --piece-black-edge: var(--wds-coolNeutral-70);
 
+  /* 배경 장식 — 배경보다 아주 살짝만 진하게. 눈에 '띄면' 실패다. */
+  --bg-grid: color-mix(in srgb, var(--wds-coolNeutral-50) 7%, transparent);
+  --bg-glyph: color-mix(in srgb, var(--wds-coolNeutral-50) 9%, transparent);
+
   /* 증강의 지속 유형 — 원본 시트가 칸 색으로 나누던 축.
      범주형이므로 status 색(빨강·초록·주황)은 쓰지 않는다. */
   --dur-turn: var(--wds-accent-foreground-cyan);
@@ -40,6 +44,8 @@
   --sq: min(82px, calc((100vh - 268px) / 8), calc((100vw - 420px) / 8));
 }
 [data-theme='dark'] {
+  --bg-grid: color-mix(in srgb, var(--wds-common-100) 4%, transparent);
+  --bg-glyph: color-mix(in srgb, var(--wds-common-100) 5%, transparent);
   --board-light: var(--wds-coolNeutral-40);
   --board-dark: var(--wds-coolNeutral-23);
   --piece-white: var(--wds-common-100);
@@ -1222,3 +1228,70 @@ body.reviewing #turnbar { display: none; }
 /* 항복 — 되돌릴 수 없는 동작이라 negative */
 .nav.danger { color: var(--wds-status-negative); border-color: var(--wds-line-status-negative-normal); }
 .nav.danger:hover { background: var(--wds-background-status-negative); border-color: var(--wds-status-negative); }
+
+
+/* ═══════════════ 배경 ═══════════════
+   판이 주인공이다. 배경은 "있는 줄 모르게" 깔리되, 허전하지는 않게.
+   색은 전부 accent 램프에서 아주 낮은 투명도로 가져온다 —
+   status 색(빨강·초록·주황)은 이 화면에서 이미 뜻이 있어서 배경에 쓰면 오독된다.
+   ──────────────────────────────────────────────────────────── */
+
+/* 1) 은은한 색 번짐. 화면 모서리에서 빛이 스며드는 정도. */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(1100px 720px at 8% -12%,
+      color-mix(in srgb, var(--wds-cat-1) 13%, transparent), transparent 60%),
+    radial-gradient(900px 640px at 104% 6%,
+      color-mix(in srgb, var(--wds-cat-4) 11%, transparent), transparent 58%),
+    radial-gradient(1200px 800px at 46% 118%,
+      color-mix(in srgb, var(--wds-cat-2) 10%, transparent), transparent 62%);
+}
+
+/* 2) 체스판 결. 64px 격자를 아주 흐리게 깔고 가운데만 남긴다(가장자리 소실). */
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 68px 68px, 68px 68px;
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 0%, transparent 76%);
+  mask-image: radial-gradient(circle at 50% 42%, #000 0%, transparent 76%);
+}
+
+/* 3) 커다란 기물 글리프 몇 개. 아주 느리게 떠다닌다. */
+#bgart { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.bgp {
+  position: absolute; line-height: 1;
+  color: var(--bg-glyph);
+  filter: blur(0.4px);
+  animation: bgdrift 34s ease-in-out infinite;
+  will-change: transform;
+}
+.bgp.p1 { font-size: 420px; left: -110px; top: -80px;  animation-duration: 41s; }
+.bgp.p2 { font-size: 260px; right: 4%;   top: 6%;      animation-duration: 33s; animation-delay: -6s; }
+.bgp.p3 { font-size: 320px; right: -70px; bottom: -90px; animation-duration: 47s; animation-delay: -14s; }
+.bgp.p4 { font-size: 200px; left: 16%;   bottom: 2%;   animation-duration: 37s; animation-delay: -21s; }
+.bgp.p5 { font-size: 150px; left: 46%;   top: -30px;   animation-duration: 29s; animation-delay: -9s; }
+.bgp.p6 { font-size: 230px; left: 2%;    top: 48%;     animation-duration: 43s; animation-delay: -17s; }
+
+@keyframes bgdrift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50%      { transform: translate3d(14px, -18px, 0) rotate(2.5deg); }
+}
+
+/* 움직임을 줄이도록 설정한 사람에게는 흐르지 않게 한다 */
+@media (prefers-reduced-motion: reduce) {
+  .bgp { animation: none; }
+}
+
+/* 메인 화면에서도 배경 장식이 보이게 한다 (제일 허전하던 곳).
+   그러려면 #home 을 투명하게 둬야 하는데, 그러면 밑에 깔린 게임 화면까지 비친다.
+   → 메인에 있는 동안에는 게임 화면 자체를 감춘다. */
+#home { background: transparent; }
+#home::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: color-mix(in srgb, var(--wds-background-normal-alternative) 55%, transparent);
+}
+body.athome > header,
+body.athome > main { visibility: hidden; }
