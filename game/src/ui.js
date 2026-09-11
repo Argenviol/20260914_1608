@@ -485,28 +485,6 @@
       thr === null ? '완료' : '다음 ' + Math.max(0, thr - g.kills[side])));
     box.appendChild(prog);
 
-    // 그 진영이 마지막으로 둔 수 — 누르면 판에서 그 칸이 반짝인다
-    const lm = g.lastBySide[side];
-    if (lm) {
-      const mv = el('button', 'striplast');
-      const cap = lm.victim ? ' ×' + E.KO[lm.victim] : '';
-      const pr = lm.promo ? '=' + E.KO[lm.promo] : '';
-      mv.innerHTML = '<span class="lmpiece">' + E.KO[lm.type] + '</span>' +
-        E.sqName(lm.from) + '→' + E.sqName(lm.to) + pr +
-        (cap ? '<span class="lmcap">' + cap + '</span>' : '');
-      mv.title = '이 수가 지나간 칸을 표시합니다';
-      mv.onclick = () => { if (!showPathFor(lm)) flash([lm.from, lm.to], null, null, true); };
-      box.appendChild(mv);
-    } else {
-      box.appendChild(el('span', 'striplast none', '아직 안 둠'));
-    }
-
-    const n = g.augs[side].length;
-    const ac = el('button', 'stripaug' + (n ? '' : ' none'), '증강 ' + n);
-    ac.title = '증강 탭 열기';
-    ac.onclick = () => { setTab('aug'); SFX().pick(); };
-    box.appendChild(ac);
-
     /* 이 진영이 잡은 기물들. grave[색] 은 '그 색이 잃은 기물' 이므로 상대 무덤을 본다.
        값이 큰 것부터 늘어놓아야 한눈에 이득을 가늠할 수 있다. */
     const taken = g.grave[E.other(side)].slice()
@@ -541,6 +519,51 @@
     const bottom = bottomSide();
     renderStrip(E.other(bottom), $('#oppstrip'));
     renderStrip(bottom, $('#mystrip'));
+  }
+
+  /* 마지막 수와 증강 수 — 예전에는 진영 스트립 안에서 처치 눈금과 한 줄을 다퉜다.
+     스트립 너비는 판에 딸려 있어서 좁아지면 눈금 '11' 글자 위로 겹쳤다.
+     판 옆(탭 위)으로 빼서 두 진영을 나란히 놓는다. 처치 눈금만 스트립에 남는다. */
+  function lastMoveRow(side) {
+    const g = G();
+    const row = el('div', 'lmrow');
+
+    const who = el('span', 'lmside');
+    who.appendChild(el('span', 'dot ' + (side === 'w' ? 'dw' : 'db')));
+    who.appendChild(el('b', null, sideName(side)));
+    row.appendChild(who);
+
+    const lm = g.lastBySide[side];
+    if (lm) {
+      const mv = el('button', 'striplast');
+      const cap = lm.victim ? ' ×' + E.KO[lm.victim] : '';
+      const pr = lm.promo ? '=' + E.KO[lm.promo] : '';
+      mv.innerHTML = '<span class="lmpiece">' + E.KO[lm.type] + '</span>' +
+        E.sqName(lm.from) + '→' + E.sqName(lm.to) + pr +
+        (cap ? '<span class="lmcap">' + cap + '</span>' : '');
+      mv.title = '이 수가 지나간 칸을 표시합니다';
+      mv.onclick = () => { if (!showPathFor(lm)) flash([lm.from, lm.to], null, null, true); };
+      row.appendChild(mv);
+    } else {
+      row.appendChild(el('span', 'striplast none', '아직 안 둠'));
+    }
+
+    const n = g.augs[side].length;
+    const ac = el('button', 'stripaug' + (n ? '' : ' none'), '증강 ' + n);
+    ac.title = '증강 탭 열기';
+    ac.onclick = () => { setTab('aug'); SFX().pick(); };
+    row.appendChild(ac);
+
+    return row;
+  }
+
+  function renderLastMoves() {
+    const box = $('#lastmoves');
+    if (!box) return;
+    const bottom = bottomSide();
+    box.innerHTML = '';
+    box.appendChild(lastMoveRow(E.other(bottom)));
+    box.appendChild(lastMoveRow(bottom));
   }
 
   /* ───────── 턴 바 ───────── */
@@ -832,7 +855,8 @@
   }
 
   function render() {
-    renderBoard(); renderStrips(); renderTurnbar(); renderActions(); renderTabPanel();
+    renderBoard(); renderStrips(); renderLastMoves();
+    renderTurnbar(); renderActions(); renderTabPanel();
     fitBoard();
   }
   global.renderAll = render;

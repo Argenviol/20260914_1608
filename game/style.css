@@ -287,6 +287,25 @@ main {
 .bar { height: 6px; background: var(--wds-fill-normal); border-radius: var(--wds-radius-full); overflow: hidden; }
 .fill { height: 100%; background: var(--wds-primary-normal); transition: width .35s; }
 
+/* ── 마지막 수 · 증강 (탭 위) ──
+   진영 스트립 안에 있을 때는 처치 눈금과 한 줄을 다투다 좁아지면 겹쳤다.
+   스트립 너비가 창이 아니라 판에 딸려 있어서 창 기준으로는 막을 수도 없었다. */
+#lastmoves {
+  flex: 0 0 auto; margin-bottom: var(--wds-space-8);
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-8) var(--wds-space-10);
+}
+.lmrow { display: flex; align-items: center; gap: var(--wds-space-8); min-width: 0; }
+.lmside {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--wds-space-4);
+  font-size: var(--wds-label2-size);
+}
+.lmrow .striplast { flex: 1 1 auto; text-align: left; }
+.lmrow .stripaug { margin-left: auto; }
+
 /* ── 오른쪽 탭 패널 ── */
 #tabs {
   /* 3열로 못박아 뒀더니 '대화' 탭이 생기면서 둘째 줄로 밀렸다.
@@ -1332,7 +1351,8 @@ body.reviewing #turnbar { display: none; }
 .kiltrack {
   position: relative; flex: 1 1 auto; min-width: 90px;
   height: 6px; background: var(--wds-fill-normal);
-  border-radius: var(--wds-radius-full); margin: 9px 0 11px;
+  /* 마지막 눈금(11)의 숫자가 트랙 오른쪽 끝을 넘어가므로 그만큼 자리를 비워 둔다 */
+  border-radius: var(--wds-radius-full); margin: 9px 10px 11px 0;
 }
 .kilfill {
   position: absolute; left: 0; top: 0; bottom: 0;
