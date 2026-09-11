@@ -591,7 +591,9 @@
         + (gm.clockPaused ? '상대가 증강을 고르는 중입니다' : '상대가 두는 중입니다');
     }
     else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
-    t.appendChild(el('span', 'turntext', msg));
+    const tt = el('span', 'turntext', msg);
+    tt.title = msg;                       // 좁아서 말줄임될 때 원문을 볼 수 있게
+    t.appendChild(tt);
 
     if (E.inCheck(g, g.turn)) t.appendChild(el('span', 'checkchip', '체크!'));
 

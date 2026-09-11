@@ -157,6 +157,7 @@
     'e2e4 d7d5 e4d5 d8d5 b1c3 d5a5 d2d4 g8f6 g1f3',      // 스칸디나비안
     'e2e4 g8f6 e4e5 f6d5 d2d4 d7d6 g1f3 c8g4 f1e2',      // 알레힌 방어
     'e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 g1f3 f8g7 f1e2',      // 피르츠 방어
+    'e2e4 g7g6 d2d4 f8g7 b1c3 d7d6 g1f3 g8f6 f1e2',      // 모던 방어
     // 1.d4
     'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3',      // 퀸즈 갬빗 디클라인드
     'd2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 e7e6 e2e3',      // 슬라브 방어
@@ -166,9 +167,31 @@
     'd2d4 g8f6 c2c4 g7g6 b1c3 d7d5 c4d5 f6d5 e2e4',      // 그륀펠트
     'd2d4 g8f6 g1f3 e7e6 c2c4 b7b6 g2g3 c8b7 f1g2',      // 퀸즈인디언
     'd2d4 d7d5 g1f3 g8f6 c2c4 e7e6 b1c3 c7c6 c1g5',      // 세미슬라브
-    // 그 외 첫 수
+    'd2d4 g8f6 c2c4 c7c5 d4d5 e7e6 b1c3 e6d5 c4d5',      // 베노니
+    'd2d4 g8f6 c2c4 c7c5 d4d5 b7b5 c4b5 a7a6 b5a6',      // 벤코 갬빗
+    'd2d4 f7f5 g2g3 g8f6 f1g2 e7e6 g1f3 f8e7 e1g1',      // 더치 방어
+    'd2d4 g7g6 e2e4 f8g7 b1c3 d7d6 g1f3 g8f6 f1e2',      // 모던 방어
+    'd2d4 e7e6 c2c4 g8f6 b1c3 f8b4 e2e3 e8g8 f1d3',      // 1.d4 e6 (님조 전환)
+    // 1.c4
     'c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 d7d5 c4d5',      // 잉글리시 오프닝
+    'c2c4 g8f6 b1c3 e7e6 g1f3 d7d5 d2d4 f8e7 c1g5',      // 잉글리시 → 퀸즈 갬빗 전환
+    'c2c4 c7c5 b1c3 b8c6 g2g3 g7g6 f1g2 f8g7 g1f3',      // 시메트리컬 잉글리시
+    'c2c4 e7e6 b1c3 d7d5 d2d4 g8f6 c1g5 f8e7 e2e3',      // 잉글리시 → QGD
+    'c2c4 g7g6 b1c3 f8g7 g2g3 e7e5 f1g2 d7d6 d2d3',      // 잉글리시 vs 킹스인디언 배치
+    // 1.Nf3
     'g1f3 d7d5 g2g3 g8f6 f1g2 e7e6 e1g1 f8e7 d2d3',      // 레티 오프닝
+    'g1f3 g8f6 c2c4 e7e6 b1c3 d7d5 d2d4 f8e7 c1g5',      // 레티 → 퀸즈 갬빗 전환
+    'g1f3 c7c5 c2c4 b8c6 b1c3 g7g6 d2d4 c5d4 f3d4',      // 잉글리시 전환 (시메트리컬)
+    'g1f3 d7d5 d2d4 g8f6 c2c4 e7e6 b1c3 f8e7 c1g5',      // 퀸즈 갬빗 전환
+    // 그 밖의 첫 수 — 책이 비면 AI 가 매번 같은 수만 골라서 지루해진다
+    'g2g3 d7d5 f1g2 g8f6 g1f3 e7e6 e1g1 f8e7 d2d3',      // 킹스 피안케토
+    'g2g3 e7e5 f1g2 d7d5 d2d3 g8f6 g1f3 b8c6 e1g1',      // 킹스 피안케토 (e5 대응)
+    'b2b3 e7e5 c1b2 b8c6 e2e3 g8f6 f1b5 f8d6 g1f3',      // 라르센 오프닝
+    'b2b3 d7d5 c1b2 g8f6 g1f3 e7e6 e2e3 f8e7 f1e2',      // 라르센 (d5 대응)
+    'f2f4 d7d5 g1f3 g8f6 e2e3 g7g6 f1e2 f8g7 e1g1',      // 버드 오프닝
+    'f2f4 e7e5 f4e5 d7d6 e5d6 f8d6 g1f3 g8f6 d2d4',      // 프롬 갬빗
+    'b1c3 d7d5 d2d4 g8f6 c1f4 a7a6 e2e3 e7e6 g1f3',      // 조바바 런던
+    'b1c3 e7e5 e2e4 g8f6 g1f3 b8c6 f1b5 f8b4 e1g1'       // 반 게트 → 포 나이츠 전환
   ];
 
   const BOOK = (() => {
@@ -192,7 +215,15 @@
     const cands = BOOK.get(G.hist.join(' '));
     if (!cands || !cands.length) return null;
     const legal = movesFor(G, side);
-    const shuffled = cands.slice().sort(() => Math.random() - 0.5);
+    /* 예전에는 sort(() => Math.random() - 0.5) 로 섞었다. 이건 고르게 안 섞인다 —
+       작은 배열에서 V8 은 삽입 정렬을 쓰는데, 무작위 비교자를 주면 원래 앞에 있던 것이
+       앞에 남을 확률이 높다. 그래서 1.e4 다음에 늘 1...e5 만 나왔다 (균등 14% 자리에 25%).
+       제대로 된 피셔–예이츠로 섞는다. */
+    const shuffled = cands.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     for (const uci of shuffled) {
       const from = uciSq(uci.slice(0, 2)), to = uciSq(uci.slice(2, 4));
       const m = legal.find(x => x.from === from && x.to === to && !x.promo);

@@ -207,14 +207,22 @@ input[type=range]::-moz-range-thumb {
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-alternative);
   border-left: 4px solid var(--wds-line-normal-normal);
-  display: flex; align-items: center; gap: var(--wds-space-8); flex-wrap: wrap;
+  /* 줄바꿈을 막는다. '체크!' 같은 칩이 붙어 두 줄이 되면 그 높이만큼 판이 줄어들어서,
+     체크가 걸릴 때마다 화면이 출렁였다. 긴 글은 말줄임으로 접는다. */
+  display: flex; align-items: center; gap: var(--wds-space-8); flex-wrap: nowrap;
   font-size: var(--wds-label1-size);
 }
 #turnbar.tw { border-left-color: var(--wds-primary-normal); }
 #turnbar.tb { border-left-color: var(--wds-label-alternative); }
 #turnbar.over { border-left-color: var(--wds-status-cautionary); }
 #turnbar.over .turntext { color: var(--wds-status-cautionary); font-weight: 700; }
-.turntext { font-weight: 600; font-size: var(--wds-heading2-size); }
+.turntext {
+  font-weight: 600; font-size: var(--wds-heading2-size);
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 칩은 어떤 폭에서도 줄지 않는다 — 상태를 알려 주는 쪽이 글보다 중요하다 */
+#turnbar .modetag, #turnbar .checkchip, #turnbar .aichip { flex: 0 0 auto; }
 .modetag {
   font-size: var(--wds-caption-size); font-weight: 700; letter-spacing: .04em;
   background: var(--wds-fill-normal); color: var(--wds-label-alternative);
