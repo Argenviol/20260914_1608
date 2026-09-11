@@ -29,10 +29,32 @@
   --piece-white-edge: var(--wds-coolNeutral-50);
   --piece-black-edge: var(--wds-coolNeutral-70);
 
-  /* 헤더 + 턴바 + 스트립 2개 + 여백을 뺀 높이, 그리고 오른쪽 패널을 뺀 너비 중 작은 값 */
-  --sq: min(82px, calc((100vh - 268px) / 8), calc((100vw - 420px) / 8));
+  /* 배경 장식 — 배경보다 아주 살짝만 진하게. 눈에 '띄면' 실패다. */
+  --bg-grid: color-mix(in srgb, var(--wds-coolNeutral-50) 7%, transparent);
+  --bg-glyph: color-mix(in srgb, var(--wds-coolNeutral-50) 9%, transparent);
+
+  /* 증강의 지속 유형 — 원본 시트가 칸 색으로 나누던 축.
+     범주형이므로 status 색(빨강·초록·주황)은 쓰지 않는다. */
+  --dur-turn: var(--wds-accent-foreground-cyan);
+  --dur-count: var(--wds-accent-foreground-violet);
+  --dur-perm: var(--wds-accent-foreground-purple);
+  --dur-none: var(--wds-label-assistive);
+
+  /* 마지막으로 둔 수 — 어떤 기물이 어디서 어디로 갔는지 판만 보고 알 수 있게.
+     빨강(처치·체크) · 초록(대상 지정) · 주황(증강 발동) · 파랑(선택/이동) · 보라(살펴보기)가
+     이미 뜻을 갖고 있어서, 남은 자리인 노랑을 쓴다. */
+  --last-move: #e9c46a;
+  --last-move-edge: #c9a227;
+
+  /* 첫 그림 전 임시값. 실제 크기는 ui.js 의 fitBoard() 가 재서 덮어쓴다 —
+     스트립 높이가 내용에 따라 변해서 상수로는 못 맞춘다. */
+  --sq: min(82px, calc((100vh - 330px) / 8), calc((100vw - 420px) / 8));
 }
 [data-theme='dark'] {
+  --last-move: #b9922f;
+  --last-move-edge: #e3c15c;
+  --bg-grid: color-mix(in srgb, var(--wds-common-100) 4%, transparent);
+  --bg-glyph: color-mix(in srgb, var(--wds-common-100) 5%, transparent);
   --board-light: var(--wds-coolNeutral-40);
   --board-dark: var(--wds-coolNeutral-23);
   --piece-white: var(--wds-common-100);
@@ -193,14 +215,22 @@ input[type=range]::-moz-range-thumb {
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-alternative);
   border-left: 4px solid var(--wds-line-normal-normal);
-  display: flex; align-items: center; gap: var(--wds-space-8); flex-wrap: wrap;
+  /* 줄바꿈을 막는다. '체크!' 같은 칩이 붙어 두 줄이 되면 그 높이만큼 판이 줄어들어서,
+     체크가 걸릴 때마다 화면이 출렁였다. 긴 글은 말줄임으로 접는다. */
+  display: flex; align-items: center; gap: var(--wds-space-8); flex-wrap: nowrap;
   font-size: var(--wds-label1-size);
 }
 #turnbar.tw { border-left-color: var(--wds-primary-normal); }
 #turnbar.tb { border-left-color: var(--wds-label-alternative); }
 #turnbar.over { border-left-color: var(--wds-status-cautionary); }
 #turnbar.over .turntext { color: var(--wds-status-cautionary); font-weight: 700; }
-.turntext { font-weight: 600; font-size: var(--wds-heading2-size); }
+.turntext {
+  font-weight: 600; font-size: var(--wds-heading2-size);
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 칩은 어떤 폭에서도 줄지 않는다 — 상태를 알려 주는 쪽이 글보다 중요하다 */
+#turnbar .modetag, #turnbar .checkchip, #turnbar .aichip { flex: 0 0 auto; }
 .modetag {
   font-size: var(--wds-caption-size); font-weight: 700; letter-spacing: .04em;
   background: var(--wds-fill-normal); color: var(--wds-label-alternative);
@@ -230,15 +260,25 @@ main {
 }
 .col { min-width: 0; height: 100%; min-height: 0; }
 .board-col {
-  width: calc(var(--sq) * 8 + 2px);
-  display: flex; flex-direction: column; gap: var(--wds-space-8);
+  /* 예전에는 칼럼 너비를 판 크기에 그대로 묶어 뒀다. 그러면 판을 줄일수록 스트립이 좁아지고,
+     좁아진 스트립은 줄이 늘어 더 높아져서, 다시 판을 줄여야 하는 악순환이 생긴다.
+     아래 한계(420px)를 둬서 스트립 높이가 더 늘지 않게 막는다. */
+  width: min(max(calc(var(--sq) * 8 + 2px), 420px), 100%);
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--wds-space-8);
   overflow: hidden;
 }
+#turnbar, #oppstrip, #mystrip { width: 100%; }
 .side-col { display: flex; flex-direction: column; min-height: 0; }
 
 /* ── 진영 스트립 ── */
 .strip {
-  display: flex; align-items: center; gap: var(--wds-space-12);
+  /* 스트립 너비는 창이 아니라 '판' 너비에 딸려 있다. 그래서 창 기준 미디어쿼리로는
+     좁아지는 순간을 못 잡는다 → 어느 폭에서든 겹치지 않게 접히도록 둔다. */
+  /* 한 줄로 고정한다. 예전에는 줄바꿈을 열어 뒀는데, 잡은 기물이 쌓이거나 이름이 길어지면
+     줄이 늘어 바가 높아졌고 그만큼 판이 줄었다. 폭이 모자라면 줄이는 쪽으로만 간다. */
+  display: flex; align-items: center; flex-wrap: nowrap;
+  gap: var(--wds-space-6) var(--wds-space-12);
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-alternative);
   border-radius: var(--wds-radius-10);
@@ -249,7 +289,9 @@ main {
 .stripname { display: flex; align-items: center; gap: var(--wds-space-6); flex: 0 0 auto; }
 .stripname b { font-size: var(--wds-heading2-size); font-weight: 700; }
 .stripwho { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); }
-.stripprog { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--wds-space-8); }
+.stripname { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.stripwho { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stripprog { flex: 1 1 90px; min-width: 0; display: flex; align-items: center; gap: var(--wds-space-8); }
 .stripprog .bar { flex: 1 1 auto; margin: 0; min-width: 40px; }
 .killn { font-weight: 700; color: var(--wds-primary-normal); font-size: var(--wds-label1-size); white-space: nowrap; }
 .killsub { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); white-space: nowrap; }
@@ -265,18 +307,115 @@ main {
 .bar { height: 6px; background: var(--wds-fill-normal); border-radius: var(--wds-radius-full); overflow: hidden; }
 .fill { height: 100%; background: var(--wds-primary-normal); transition: width .35s; }
 
+/* ── 내 차례 ──
+   턴 바 글자만으로는 판을 보다가 놓친다. 판 둘레가 은은하게 뛰게 해서
+   판에서 눈을 떼지 않아도 차례가 왔다는 걸 알 수 있게 한다. */
+#boardwrap { position: relative; border-radius: var(--wds-radius-12); }
+#boardwrap::after {
+  content: ''; position: absolute; inset: -6px;
+  border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow .25s;
+}
+body.myturn #boardwrap::after {
+  animation: myturnpulse 2.4s ease-in-out infinite;
+}
+@keyframes myturnpulse {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--wds-primary-normal) 45%, transparent),
+                         0 0 14px 2px color-mix(in srgb, var(--wds-primary-normal) 20%, transparent); }
+  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wds-primary-normal) 85%, transparent),
+                         0 0 24px 6px color-mix(in srgb, var(--wds-primary-normal) 38%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.myturn #boardwrap::after {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wds-primary-normal) 70%, transparent);
+  }
+}
+
+/* ── 용어 뜻 풍선 ──
+   증강을 고르는 화면에서도 눌러야 하므로 오버레이(120)보다 위에 둔다. */
+.tw[data-term] { cursor: help; }
+.ttag[data-term] { cursor: help; }
+.termpop {
+  position: fixed; z-index: 160; max-width: min(340px, 88vw);
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-10) var(--wds-space-12);
+  box-shadow: var(--wds-shadow-xlarge);
+}
+.termpophead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--wds-space-10); margin-bottom: var(--wds-space-6);
+}
+.termpopx {
+  background: transparent; border: 0; color: var(--wds-label-assistive);
+  font-size: var(--wds-label2-size); line-height: 1; padding: 2px 4px;
+}
+.termpopx:hover { color: var(--wds-label-normal); }
+.termpopbody {
+  font-size: var(--wds-label1-size); line-height: 1.65; color: var(--wds-label-neutral);
+}
+
+/* ── 증강 카드의 교환 메모 ── */
+.augnote {
+  display: flex; align-items: baseline; gap: var(--wds-space-6);
+  margin-top: var(--wds-space-8); padding-top: var(--wds-space-8);
+  border-top: 1px dashed var(--wds-line-normal-alternative);
+  font-size: var(--wds-label2-size); color: var(--wds-label-neutral);
+}
+.augnotelabel {
+  flex: 0 0 auto; font-weight: 700;
+  color: var(--wds-cat-4, var(--wds-label-alternative));
+}
+
+/* 기록 패널 안에서 바로 빠져나오는 띠 — 기록을 누르던 자리에서 손을 안 옮기게 */
+.logback {
+  position: sticky; top: 0; z-index: 3;
+  width: 100%; text-align: left;
+  background: var(--wds-primary-normal); color: var(--wds-static-white);
+  border: 0; border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-6) var(--wds-space-10);
+  font-size: var(--wds-label2-size); font-weight: 700;
+  margin-bottom: var(--wds-space-4);
+}
+.logback:hover { filter: brightness(1.08); }
+
+/* ── 마지막 수 · 증강 (탭 위) ──
+   진영 스트립 안에 있을 때는 처치 눈금과 한 줄을 다투다 좁아지면 겹쳤다.
+   스트립 너비가 창이 아니라 판에 딸려 있어서 창 기준으로는 막을 수도 없었다. */
+#lastmoves {
+  flex: 0 0 auto; margin-bottom: var(--wds-space-8);
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-8) var(--wds-space-10);
+}
+.lmrow { display: flex; align-items: center; gap: var(--wds-space-8); min-width: 0; }
+.lmside {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--wds-space-4);
+  font-size: var(--wds-label2-size);
+}
+.lmrow .striplast { flex: 1 1 auto; text-align: left; }
+.lmrow .stripaug { margin-left: auto; }
+
 /* ── 오른쪽 탭 패널 ── */
 #tabs {
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  /* 3열로 못박아 뒀더니 '대화' 탭이 생기면서 둘째 줄로 밀렸다.
+     보이는 탭 개수에 맞춰 한 줄로 나눠 갖게 한다 (숨긴 탭은 칸을 차지하지 않는다). */
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   gap: 0; flex: 0 0 auto; margin-bottom: var(--wds-space-8);
 }
 #tabs button {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-normal);
   color: var(--wds-label-alternative);
-  padding: var(--wds-space-8) var(--wds-space-6);
+  padding: var(--wds-space-8) var(--wds-space-4);
   font-size: var(--wds-label1-size); font-weight: 600;
   margin-left: -1px;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #tabs button:first-child { border-radius: var(--wds-radius-8) 0 0 var(--wds-radius-8); margin-left: 0; }
 #tabs button:last-child { border-radius: 0 var(--wds-radius-8) var(--wds-radius-8) 0; }
@@ -333,7 +472,13 @@ main {
 .sq.dark { background: var(--board-dark); }
 
 /* 마지막 수 — 중립 강조 (경고가 아니므로 status 색을 쓰지 않는다) */
-.sq.last { box-shadow: inset 0 0 0 100px var(--wds-fill-strong); }
+/* 마지막 수 — 칸을 노랗게 물들이고 테두리로 한 번 더 잡아 준다.
+   판 색(중립 회색) 위에서 눈에 확 들어오면서, 다른 강조색과 뜻이 겹치지 않는다. */
+.sq.last {
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--last-move) 42%, transparent),
+              inset 0 0 0 2px var(--last-move-edge);
+}
+.sq.last.sel, .sq.last.dest, .sq.last.capture { box-shadow: inset 0 0 0 100px var(--wds-line-primary-strong); }
 /* 선택 · 이동 — primary */
 .sq.sel { box-shadow: inset 0 0 0 100px var(--wds-line-primary-strong); }
 .sq.dest::after {
@@ -399,7 +544,7 @@ main {
 }
 
 #dragghost {
-  position: fixed; left: 0; top: 0; pointer-events: none; z-index: 100;
+  position: fixed; left: 0; top: 0; pointer-events: none; z-index: 150;
   font-size: calc(var(--sq) * .86); line-height: 1; display: none;
   filter: drop-shadow(0 6px 10px var(--wds-material-dimmer));
 }
@@ -407,7 +552,11 @@ main {
 #dragghost.wp { color: var(--piece-white); text-shadow: 0 0 1px var(--piece-white-edge); }
 #dragghost.bp { color: var(--piece-black); text-shadow: 0 0 1px var(--piece-black-edge); }
 
-#phased { display: flex; gap: var(--wds-space-6); flex-wrap: wrap; margin-top: var(--wds-space-10); min-height: 4px; }
+/* 포영 칩과 발동 버튼은 판 칼럼 밖(오른쪽 탭 위)에 둔다.
+   판 아래에 있을 때는 나타났다 사라질 때마다 그만큼 판이 줄었다 늘었다 했다.
+   비어 있으면 자리도 차지하지 않는다. */
+#phased { display: flex; gap: var(--wds-space-6); flex-wrap: wrap; margin-bottom: var(--wds-space-8); }
+#phased:empty, #actions:empty { display: none; }
 .chip {
   background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
   border-radius: var(--wds-radius-full); padding: 2px var(--wds-space-10);
@@ -418,8 +567,9 @@ main {
 .chip b.bp { color: var(--wds-label-alternative); }
 
 #actions {
-  margin-top: var(--wds-space-10); display: flex; flex-direction: column;
-  gap: var(--wds-space-6); overflow-y: auto; min-height: 0;
+  flex: 0 0 auto; margin-bottom: var(--wds-space-8);
+  display: flex; flex-direction: column;
+  gap: var(--wds-space-6); max-height: 34vh; overflow-y: auto;
 }
 .act {
   background: var(--wds-background-status-cautionary);
@@ -535,7 +685,7 @@ main {
 
 /* ═══════════════ 배너 · 가운데 알림 ═══════════════ */
 #banners {
-  position: fixed; top: var(--wds-space-14); right: var(--wds-space-16); z-index: 80;
+  position: fixed; top: var(--wds-space-14); right: var(--wds-space-16); z-index: 140;
   display: flex; flex-direction: column; gap: var(--wds-space-8);
   max-width: min(400px, 92vw); pointer-events: none;
 }
@@ -556,7 +706,7 @@ main {
 .bbody { font-size: var(--wds-label2-size); color: var(--wds-label-neutral); margin-top: 2px; line-height: 1.5; }
 
 #center {
-  position: fixed; inset: 0; z-index: 75;
+  position: fixed; inset: 0; z-index: 140;
   display: flex; align-items: center; justify-content: center;
   pointer-events: none; opacity: 0; transition: opacity .22s;
 }
@@ -621,7 +771,7 @@ main {
   position: fixed; inset: 0; background: var(--wds-material-dimmer);
   backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
-  z-index: 50; padding: var(--wds-space-20);
+  z-index: 120; padding: var(--wds-space-20);          /* #home(90) 위 */
 }
 .modal {
   background: var(--wds-background-elevated-normal);
@@ -631,6 +781,9 @@ main {
   max-width: 520px; width: 100%; max-height: 90vh; overflow: auto;
   box-shadow: var(--wds-shadow-xlarge);
 }
+/* 도감·규칙처럼 안쪽이 스크롤되는 화면.
+   모달까지 같이 스크롤되면 스크롤바가 두 개 겹치고, 내용이 카드 한가운데서 잘린다. */
+.modal.fill { display: flex; flex-direction: column; overflow: hidden; }
 .overlay.wide .modal { max-width: 1060px; }
 .modal h2 { margin: 0 0 var(--wds-space-4); font-size: var(--wds-title2-size); }
 .modal h3 { margin: 0 0 var(--wds-space-12); font-size: var(--wds-heading1-size); font-weight: 700; }
@@ -644,6 +797,13 @@ main {
   padding: var(--wds-space-10) var(--wds-space-14); text-align: left;
 }
 .opt:hover { border-color: var(--wds-primary-normal); background: var(--wds-background-status-positive); }
+.opt.blocked {
+  position: relative; opacity: .6; cursor: not-allowed;
+  border-color: var(--wds-line-status-negative-normal);
+  background: var(--wds-background-status-negative);
+}
+.opt.blocked:hover { border-color: var(--wds-line-status-negative-normal); background: var(--wds-background-status-negative); }
+.opt.blocked .blockx { font-size: 20px; top: var(--wds-space-8); right: var(--wds-space-10); }
 .opt.primary {
   background: var(--wds-primary-normal); color: var(--wds-static-white);
   font-weight: 700; border-color: var(--wds-primary-normal);
@@ -681,13 +841,32 @@ main {
   padding: var(--wds-space-16); text-align: left; transition: .15s;
 }
 .card:hover { transform: translateY(-3px); border-color: var(--wds-primary-normal); box-shadow: var(--wds-shadow-medium); }
-/* 기물 종류 — 범주형이므로 accent 램프 (status 색 금지) */
-.card.p-p { border-top-color: var(--wds-cat-1); }
-.card.p-r { border-top-color: var(--wds-cat-2); }
-.card.p-n { border-top-color: var(--wds-cat-3); }
-.card.p-b { border-top-color: var(--wds-cat-4); }
-.card.p-q { border-top-color: var(--wds-cat-5); }
-.card.p-k { border-top-color: var(--wds-cat-6); }
+/* 카드 색 = 지속 유형. 기물은 드래프트 제목에 이미 적혀 있어서 색까지 쓸 필요가 없다.
+   테두리 선 모양도 같이 바꿔, 색을 구분하기 어려운 경우에도 읽히게 한다. */
+.card.d-turn  { border-top-color: var(--dur-turn);  border-top-style: dashed; }
+.card.d-count { border-top-color: var(--dur-count); border-top-style: dotted; }
+.card.d-perm  { border-top-color: var(--dur-perm);  border-top-style: solid; }
+.card.d-none  { border-top-color: var(--dur-none);  border-top-style: solid; }
+
+/* 지속 유형 칩 */
+.durchip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--wds-caption-size); font-weight: 700;
+  border: 1px solid; border-radius: var(--wds-radius-4);
+  padding: 1px var(--wds-space-6); white-space: nowrap; cursor: help;
+}
+.d-turn  > .durchip, .durchip.d-turn  { color: var(--dur-turn);  border-color: var(--dur-turn);  background: color-mix(in srgb, var(--dur-turn) 12%, transparent); }
+.d-count > .durchip, .durchip.d-count { color: var(--dur-count); border-color: var(--dur-count); background: color-mix(in srgb, var(--dur-count) 12%, transparent); }
+.d-perm  > .durchip, .durchip.d-perm  { color: var(--dur-perm);  border-color: var(--dur-perm);  background: color-mix(in srgb, var(--dur-perm) 12%, transparent); }
+.d-none  > .durchip, .durchip.d-none  { color: var(--dur-none);  border-color: var(--wds-line-normal-normal); }
+.durlegend { display: inline-flex; gap: var(--wds-space-6); flex-wrap: wrap; align-items: center; }
+
+/* 보유 증강 목록에도 같은 색 띠를 준다 */
+.aug { border-left: 3px solid var(--wds-line-normal-alternative); }
+.aug.d-turn  { border-left-color: var(--dur-turn); }
+.aug.d-count { border-left-color: var(--dur-count); }
+.aug.d-perm  { border-left-color: var(--dur-perm); }
+.aug .durchip { margin-right: var(--wds-space-4); vertical-align: 1px; }
 .cardtop { display: flex; align-items: center; gap: var(--wds-space-6); margin-bottom: var(--wds-space-8); }
 .cardid { font-size: var(--wds-label1-size); font-weight: 700; color: var(--wds-primary-normal); letter-spacing: .03em; }
 .cardtag {
@@ -719,9 +898,9 @@ main {
 .overlay.peeking { background: transparent; backdrop-filter: none; pointer-events: none; }
 .overlay.peeking .modal { opacity: 0; pointer-events: none; }
 .peekbar {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--wds-space-24); z-index: 70;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--wds-space-24); z-index: 130;
   background: var(--wds-background-elevated-normal);
-  border: 1px solid var(--wds-status-cautionary);
+  border: 2px solid var(--wds-status-cautionary);
   color: var(--wds-label-normal);
   border-radius: var(--wds-radius-12);
   padding: var(--wds-space-10) var(--wds-space-16);
@@ -729,10 +908,17 @@ main {
   box-shadow: var(--wds-shadow-large); font-size: var(--wds-label1-size); font-weight: 600;
 }
 .peekbar.show { display: flex; }
+.peekmsg { display: flex; flex-direction: column; gap: 2px; }
+.peekmsg b { font-size: var(--wds-heading1-size); font-weight: 700; }
+.peeksub { font-size: var(--wds-label1-size); color: var(--wds-label-alternative); font-weight: 500; }
+.skipbtn.big {
+  font-size: var(--wds-body2-size); padding: var(--wds-space-10) var(--wds-space-16);
+  border-width: 2px; border-color: var(--wds-status-cautionary); color: var(--wds-status-cautionary);
+}
 
 /* 대상 지정 바 — positive */
 .pickbar {
-  position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--wds-space-24); z-index: 60;
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--wds-space-24); z-index: 130;
   background: var(--wds-background-elevated-normal);
   border: 2px solid var(--wds-status-positive);
   color: var(--wds-label-normal);
@@ -749,7 +935,7 @@ main {
 }
 
 #toast {
-  position: fixed; left: 50%; transform: translateX(-50%) translateY(12px); top: 72px; z-index: 70;
+  position: fixed; left: 50%; transform: translateX(-50%) translateY(12px); top: 72px; z-index: 145;
   background: var(--wds-inverse-background); color: var(--wds-inverse-label);
   border-radius: var(--wds-radius-10);
   padding: var(--wds-space-10) var(--wds-space-16);
@@ -758,27 +944,143 @@ main {
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ═══════════════ 도감 ═══════════════ */
-.codexbody { max-height: 64vh; overflow: auto; margin-top: var(--wds-space-12); display: flex; flex-direction: column; gap: var(--wds-space-10); }
-.codexbody h3 { margin: var(--wds-space-12) 0 2px; }
-.cgrid { display: grid; grid-template-columns: 64px repeat(auto-fit, minmax(190px, 1fr)); gap: var(--wds-space-8); align-items: start; }
-.cpiece { font-weight: 700; font-size: var(--wds-heading1-size); padding-top: var(--wds-space-8); }
-.ccell { display: flex; flex-direction: column; gap: var(--wds-space-6); }
-.ctier { font-size: var(--wds-caption-size); font-weight: 700; color: var(--wds-label-assistive); letter-spacing: .06em; }
-.crow {
+/* ═══════════════ 도감 · 규칙 ═══════════════ */
+.codexhead {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: var(--wds-space-16); flex-wrap: wrap;
+}
+.codexbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--wds-space-8) var(--wds-space-20);
+  margin-top: var(--wds-space-16); padding-bottom: var(--wds-space-12);
+  border-bottom: 1px solid var(--wds-line-normal-alternative);
+}
+.segrow { display: flex; align-items: center; gap: var(--wds-space-8); }
+.seglabel { font-size: var(--wds-label2-size); font-weight: 700; color: var(--wds-label-assistive); }
+.seg {
+  display: inline-flex; background: var(--wds-fill-normal);
+  border-radius: var(--wds-radius-8); padding: 2px;
+}
+.seg button {
+  background: transparent; border: 0; color: var(--wds-label-alternative);
+  font-size: var(--wds-label1-size); font-weight: 700;
+  border-radius: var(--wds-radius-6); padding: var(--wds-space-4) var(--wds-space-10);
+}
+.seg button:hover { color: var(--wds-label-normal); }
+.seg button.on {
+  background: var(--wds-background-elevated-normal); color: var(--wds-primary-normal);
+  box-shadow: var(--wds-shadow-small);
+}
+.codexsearch {
+  flex: 1 1 180px; min-width: 160px;
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-6) var(--wds-space-10); font: inherit;
+}
+.codexsearch:focus { outline: none; border-color: var(--wds-primary-normal); }
+
+.codexbody {
+  /* 예전에는 68vh 로 못 박아 뒀다. 머리말·닫기 버튼을 더하면 모달 높이(90vh)를 넘겨서
+     모달도 같이 스크롤됐다. 남은 높이를 그대로 쓰게 두면 스크롤바가 하나로 끝난다. */
+  flex: 1 1 auto; min-height: 120px;
+  overflow: auto; margin-top: var(--wds-space-16);
+  display: flex; flex-direction: column; gap: var(--wds-space-16);
+  /* 스크롤바가 카드에 딱 붙으면 카드 테두리와 겹쳐 보인다. 한 칸 띄운다. */
+  padding-right: var(--wds-space-12);
+  scrollbar-width: thin;
+  scrollbar-color: var(--wds-fill-strong) transparent;
+}
+.codexbody::-webkit-scrollbar { width: 8px; }
+.codexbody::-webkit-scrollbar-track { background: transparent; }
+.codexbody::-webkit-scrollbar-thumb {
+  background: var(--wds-fill-strong); border-radius: var(--wds-radius-full);
+}
+.codexbody::-webkit-scrollbar-thumb:hover { background: var(--wds-label-assistive); }
+.codexbody h3 {
+  margin: var(--wds-space-8) 0 0; font-size: var(--wds-heading1-size); font-weight: 700;
+  position: sticky; top: 0; z-index: 2;
+  background: var(--wds-background-elevated-normal);
+  padding: var(--wds-space-6) 0; border-bottom: 1px solid var(--wds-line-normal-alternative);
+}
+
+/* 기물 한 덩이 = 가로로 티어 4칸 */
+.csec { display: flex; flex-direction: column; gap: var(--wds-space-8); }
+.csechead {
+  display: flex; align-items: baseline; gap: var(--wds-space-8);
+  position: sticky; top: 0; z-index: 2;
+  background: var(--wds-background-elevated-normal);
+  padding: var(--wds-space-6) 0; border-bottom: 1px solid var(--wds-line-normal-alternative);
+}
+.csechead b { font-size: var(--wds-heading1-size); }
+.ccols {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
+  gap: var(--wds-space-12); align-items: start;
+}
+.ccol { display: flex; flex-direction: column; gap: var(--wds-space-8); }
+
+/* 티어 칼럼이 부모의 행을 그대로 쓰게 해서 모든 카드 높이를 맞춘다.
+   행 개수는 ui.js 가 gridTemplateRows 로 넣어 준다 (칸마다 3개지만 검색하면 줄어든다).
+   subgrid 를 모르는 브라우저는 위의 flex 배치 그대로 간다 — 어긋나 보일 뿐 못 쓰지는 않는다. */
+@supports (grid-template-rows: subgrid) {
+  .ccols { align-items: stretch; }
+  .ccol { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; }
+}
+.ctier {
+  font-size: var(--wds-label2-size); font-weight: 700; letter-spacing: .04em;
+  color: var(--wds-label-alternative);
+  background: var(--wds-fill-normal); border-radius: var(--wds-radius-6);
+  padding: var(--wds-space-4) var(--wds-space-8); text-align: center;
+}
+.ccard {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-alternative);
-  border-radius: var(--wds-radius-8); padding: var(--wds-space-8) var(--wds-space-12);
+  border-top: 3px solid var(--dur-none);
+  border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-10) var(--wds-space-12);
 }
-.chead { margin-bottom: var(--wds-space-4); }
-.ctext { font-size: var(--wds-label1-size); line-height: 1.55; }
-.corig {
-  margin-top: var(--wds-space-6); font-size: var(--wds-label2-size);
-  color: var(--wds-label-alternative); line-height: 1.55;
-  border-top: 1px dashed var(--wds-line-normal-normal); padding-top: var(--wds-space-6);
+.ccard.d-turn  { border-top-color: var(--dur-turn);  border-top-style: dashed; }
+.ccard.d-count { border-top-color: var(--dur-count); border-top-style: dotted; }
+.ccard.d-perm  { border-top-color: var(--dur-perm);  border-top-style: solid; }
+.ccard .cardtop { margin-bottom: var(--wds-space-6); flex-wrap: wrap; }
+.ctext { font-size: var(--wds-label1-size); line-height: 1.6; }
+
+/* 규칙 화면 */
+/* 4단계짜리 흐름이라 3+1 로 쪼개지면 흐름으로 안 읽힌다. 4 → 2 → 1 로만 접는다. */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--wds-space-10); }
+@media (max-width: 1000px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 540px)  { .flow { grid-template-columns: 1fr; } }
+.flowstep {
+  position: relative; display: grid; grid-template-columns: auto 1fr; gap: var(--wds-space-10);
+  align-items: start;
+  background: var(--wds-background-normal-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-10); padding: var(--wds-space-12);
 }
+.flowno {
+  position: absolute; top: -8px; left: -8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--wds-primary-normal); color: var(--wds-static-white);
+  font-size: var(--wds-caption-size); font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.flowic { font-size: 22px; line-height: 1.2; color: var(--wds-primary-normal); }
+.flowt { font-weight: 700; margin-bottom: 2px; }
+.flowd { font-size: var(--wds-label1-size); line-height: 1.6; color: var(--wds-label-neutral); }
+.flowd b { color: var(--wds-label-normal); }
+
+.rgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: var(--wds-space-10); }
+.rcard {
+  background: var(--wds-background-normal-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-left: 3px solid var(--wds-primary-normal);
+  border-radius: var(--wds-radius-8); padding: var(--wds-space-10) var(--wds-space-12);
+}
+.rname { font-weight: 700; margin-bottom: var(--wds-space-4); }
+
+/* 도감·규칙은 본문이 스크롤되므로, 닫기는 본문 밖 오른쪽 아래에 붙인다 */
+.codex { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.codex .closebtn { align-self: flex-end; }
 .closebtn {
-  margin-top: var(--wds-space-14); background: var(--wds-primary-normal);
+  margin-top: var(--wds-space-16); background: var(--wds-primary-normal);
   border: 0; color: var(--wds-static-white); font-weight: 700;
   border-radius: var(--wds-radius-8); padding: var(--wds-space-8) var(--wds-space-20);
 }
@@ -819,17 +1121,18 @@ body.athome { overflow: hidden; }
   padding: var(--wds-space-32) var(--wds-space-20);
 }
 #home.hidden { display: none; }
-.homeinner { width: 100%; max-width: 900px; }
+.homeinner { width: 100%; max-width: 1180px; }
 .homehead { text-align: center; margin-bottom: var(--wds-space-32); }
 .hometitle {
   margin: 0; font-size: clamp(36px, 7vw, 60px); font-weight: 800;
   line-height: 1.2; letter-spacing: -0.02em; color: var(--wds-label-normal);
 }
-.homesub { margin: var(--wds-space-10) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
+.homesub { margin: var(--wds-space-6) 0 0; color: var(--wds-label-alternative); font-size: var(--wds-body1-size); }
 
-.homegrid { display: grid; grid-template-columns: 1fr 296px; gap: var(--wds-space-20); align-items: start; }
-.modecards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--wds-space-16); }
-.modecard {
+/* AI · 2인 · 온라인 3장이 한 줄, 기록은 그 옆 */
+.homegrid { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: var(--wds-space-16); align-items: start; }
+.modecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--wds-space-14); }
+.modecard { min-width: 0;
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-normal);
   border-radius: var(--wds-radius-16);
@@ -874,8 +1177,17 @@ body.athome { overflow: hidden; }
   border: 1px solid var(--wds-line-normal-normal);
   border-radius: var(--wds-radius-16);
   padding: var(--wds-space-16); box-shadow: var(--wds-shadow-small);
+  /* 모드 카드와 나란히 선다. 기록이 쌓여도 카드보다 길어지지 않게 묶어 둔다. */
+  display: flex; flex-direction: column; max-height: 46vh; min-height: 0;
 }
-.rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-12); }
+.recordcard #h-records { min-height: 0; }
+.rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-8); }
+/* 좁은 세로 칸이라 항목은 두 줄짜리 원래 모양 그대로. 넘치면 목록만 스크롤한다. */
+#h-records { display: flex; flex-direction: column; gap: var(--wds-space-8); min-height: 0; }
+#h-records .reclist {
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  overflow: auto; min-height: 0;
+}
 .recempty { color: var(--wds-label-alternative); font-size: var(--wds-label1-size); line-height: 1.65; }
 .recsum { font-size: var(--wds-body2-size); margin-bottom: var(--wds-space-8); }
 .recsum .rw { color: var(--wds-status-positive); font-weight: 700; }
@@ -907,7 +1219,12 @@ body.athome { overflow: hidden; }
 
 /* ═══════════════ 반응형 ═══════════════ */
 @media (max-width: 1060px) {
+  /* 더 좁아지면 기록을 카드 아래로 내린다 */
   .homegrid { grid-template-columns: 1fr; }
+  .recordcard { max-height: 30vh; }
+}
+@media (max-width: 900px) {
+  .modecards { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 980px) {
   /* 오른쪽 패널을 판 아래로 */
@@ -936,7 +1253,8 @@ body.athome { overflow: hidden; }
 
 /* ═══════════════ 마지막 수 · 국면 되돌려 보기 ═══════════════ */
 .striplast {
-  flex: 0 0 auto;
+  flex: 0 1 auto; min-width: 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--wds-fill-alternative);
   border: 1px solid var(--wds-line-normal-alternative);
   color: var(--wds-label-neutral);
@@ -969,13 +1287,334 @@ body.athome { overflow: hidden; }
   border-left: 4px solid var(--wds-primary-normal);
   border-radius: var(--wds-radius-10);
   padding: var(--wds-space-8) var(--wds-space-12);
-  display: flex; gap: var(--wds-space-8); align-items: center; flex-wrap: wrap;
+  display: flex; gap: var(--wds-space-8); align-items: center; flex-wrap: nowrap;
   font-size: var(--wds-label1-size); font-weight: 600;
 }
-.reviewbar span { flex: 1 1 auto; min-width: 0; }
+.revinfo { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 턴 바와 높이를 맞추려면 버튼이 얇아야 한다 — 44px 에서 테두리·안여백을 빼면 26px 이 남는다 */
+.reviewbar .skipbtn, .reviewbar .nav {
+  flex: 0 0 auto; padding: 3px var(--wds-space-8);
+  font-size: var(--wds-label2-size); line-height: 1.5;
+}
 /* 지난 국면을 보는 동안에는 현재 턴 안내를 숨긴다 */
 body.reviewing #turnbar { display: none; }
+/* 두 바는 같은 자리를 나눠 쓴다. 높이가 다르면 그 차이만큼 판이 줄었다 늘었다 하면서
+   기록을 누를 때마다 화면이 출렁인다. 그래서 높이를 같이 묶어 둔다. */
+#turnbar, .reviewbar { min-height: 44px; max-height: 44px; box-sizing: border-box; overflow: hidden; }
 .reviewbar .skipbtn {
   border-color: var(--wds-line-normal-normal); color: var(--wds-label-alternative);
 }
 .reviewbar .skipbtn:hover { border-color: var(--wds-primary-normal); color: var(--wds-label-normal); }
+
+/* ═══════════════ 온라인 대전 ═══════════════ */
+/* 다른 모드 카드와 같은 세로형. 참가 줄만 추가로 붙는다. */
+.modecard.online .joinrow { display: flex; gap: var(--wds-space-8); margin-top: var(--wds-space-8); }
+.modecard.online .joinrow input {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-12) var(--wds-space-10);
+  font: inherit; font-weight: 700; letter-spacing: .16em; text-align: center;
+  text-transform: uppercase;
+}
+.modecard.online .joinrow input::placeholder { letter-spacing: normal; font-weight: 500; }
+.modecard.online .joinrow input:focus { outline: none; border-color: var(--wds-primary-normal); }
+.modecard.online .joinrow .startbtn { flex: 0 0 auto; margin-top: 0; padding: var(--wds-space-12) var(--wds-space-20); }
+
+/* ── 온라인 방 설정 (시간 · 내 색) ── */
+.onlineopt {
+  display: flex; flex-direction: column; gap: var(--wds-space-8);
+  background: var(--wds-background-normal-alternative);
+  border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-10) var(--wds-space-12);
+  margin-bottom: var(--wds-space-12);
+}
+.onlineopt .fld { display: flex; align-items: center; justify-content: space-between; gap: var(--wds-space-8); }
+.fldlabel { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); font-weight: 700; }
+.colorpick { display: flex; align-items: center; justify-content: space-between; gap: var(--wds-space-6); }
+.colorpick button {
+  flex: 1 1 0; min-width: 0;
+  background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
+  color: var(--wds-label-alternative); border-radius: var(--wds-radius-6);
+  padding: var(--wds-space-4) 0; font-size: var(--wds-label2-size); font-weight: 700;
+}
+.colorpick button.on {
+  background: var(--wds-background-status-positive);
+  border-color: var(--wds-primary-normal); color: var(--wds-primary-normal);
+}
+
+/* 방 대기 화면 */
+#lobby {
+  position: fixed; inset: 0; z-index: 125;
+  background: var(--wds-material-dimmer); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: var(--wds-space-20);
+}
+#lobby.hidden { display: none; }
+.lobbycard {
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-16);
+  box-shadow: var(--wds-shadow-xlarge);
+  padding: var(--wds-space-32); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: var(--wds-space-12);
+  max-width: 420px; width: 100%;
+}
+.lobbytitle { font-size: var(--wds-title2-size); font-weight: 700; }
+.lobbysub { font-size: var(--wds-label1-size); color: var(--wds-label-alternative); }
+.roomcode {
+  font-size: 44px; font-weight: 800; letter-spacing: .22em;
+  color: var(--wds-primary-normal);
+  background: var(--wds-background-status-positive);
+  border: 2px dashed var(--wds-primary-normal);
+  border-radius: var(--wds-radius-12);
+  padding: var(--wds-space-12) var(--wds-space-20); margin-left: .22em;
+}
+.lobbystatus {
+  font-size: var(--wds-label1-size); color: var(--wds-label-neutral);
+  min-height: 1.4em; line-height: 1.5;
+}
+
+/* 연결 상태 배너 */
+#netbar {
+  position: fixed; left: 50%; transform: translateX(-50%); top: var(--wds-space-14); z-index: 146;
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-8) var(--wds-space-16);
+  font-size: var(--wds-label1-size); font-weight: 700;
+  box-shadow: var(--wds-shadow-large); max-width: 88vw; text-align: center;
+}
+#netbar.hidden { display: none; }
+#netbar.net-ok {
+  background: var(--wds-background-status-positive); color: var(--wds-status-positive);
+  border: 1px solid var(--wds-status-positive);
+}
+#netbar.net-warn {
+  background: var(--wds-background-status-cautionary); color: var(--wds-status-cautionary);
+  border: 1px solid var(--wds-status-cautionary);
+}
+#netbar.net-bad {
+  background: var(--wds-background-status-negative); color: var(--wds-status-negative);
+  border: 1px solid var(--wds-status-negative);
+}
+
+/* ── 온라인 대화 ── */
+#tabs button.unread { color: var(--wds-primary-normal); }
+#tabs button.unread::after {
+  content: attr(data-n); display: inline-block; min-width: 15px; height: 15px;
+  margin-left: 4px; padding: 0 3px; border-radius: 8px;
+  background: var(--wds-primary-normal); color: var(--wds-static-white);
+  font-size: 9px; font-weight: 800; line-height: 15px; vertical-align: middle;
+}
+.chatlist {
+  display: flex; flex-direction: column; gap: var(--wds-space-6);
+  overflow: auto; flex: 1 1 auto; min-height: 0; padding-bottom: var(--wds-space-8);
+}
+.chatrow {
+  display: flex; align-items: baseline; gap: var(--wds-space-6);
+  max-width: 88%; padding: var(--wds-space-6) var(--wds-space-10);
+  border-radius: var(--wds-radius-10); font-size: var(--wds-label1-size); line-height: 1.5;
+  word-break: break-word;
+}
+.chatrow.me {
+  align-self: flex-end; background: var(--wds-primary-normal); color: var(--wds-static-white);
+}
+.chatrow.you {
+  align-self: flex-start; background: var(--wds-background-normal-normal);
+  border: 1px solid var(--wds-line-normal-alternative);
+}
+.chatemote { font-size: 22px; line-height: 1; }
+.emotes {
+  display: flex; flex-wrap: wrap; gap: var(--wds-space-4);
+  padding: var(--wds-space-8) 0; border-top: 1px solid var(--wds-line-normal-alternative);
+}
+.emote {
+  background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
+  border-radius: var(--wds-radius-8); padding: 2px var(--wds-space-6);
+  font-size: 18px; line-height: 1.3;
+}
+.emote:hover { border-color: var(--wds-primary-normal); background: var(--wds-fill-strong); }
+.chatinput { display: flex; gap: var(--wds-space-6); }
+.chatinput input {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-8) var(--wds-space-10); font: inherit;
+}
+.chatinput input:focus { outline: none; border-color: var(--wds-primary-normal); }
+#tabpanel { display: flex; flex-direction: column; }
+
+/* ── 증강 고르는 제한시간 ── */
+.drafttimer { display: flex; align-items: center; gap: var(--wds-space-8); margin-left: auto; }
+.dtnum {
+  font-size: var(--wds-heading1-size); font-weight: 800;
+  font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right;
+  color: var(--wds-label-neutral);
+}
+.dtbar {
+  width: 96px; height: 6px; background: var(--wds-fill-normal);
+  border-radius: var(--wds-radius-full); overflow: hidden;
+}
+.dtfill { height: 100%; width: 100%; background: var(--wds-primary-normal); transition: width .1s linear; }
+/* 10초 남으면 빨강 — 이 화면에서 빨강은 '되돌릴 수 없음' 이라 여기 딱 맞는다 */
+.drafttimer.urgent .dtnum { color: var(--wds-status-negative); animation: blink .6s infinite alternate; }
+.drafttimer.urgent .dtfill { background: var(--wds-status-negative); }
+@media (prefers-reduced-motion: reduce) { .drafttimer.urgent .dtnum { animation: none; } }
+
+/* ── 처치 진행 눈금 ──
+   막대 하나에 글자만 있으면 1·3·6·11 이 어디쯤인지 안 보인다. 눈금을 직접 찍는다. */
+.kiltrack {
+  position: relative; flex: 1 1 auto; min-width: 56px;
+  height: 6px; background: var(--wds-fill-normal);
+  /* 마지막 눈금(11)의 숫자가 트랙 오른쪽 끝을 넘어가므로 그만큼 자리를 비워 둔다 */
+  border-radius: var(--wds-radius-full); margin: 9px 10px 11px 0;
+}
+.kilfill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--wds-primary-normal); border-radius: var(--wds-radius-full);
+  transition: width .35s;
+}
+.kilpip {
+  position: absolute; top: 50%; width: 9px; height: 9px; margin-left: -4.5px;
+  transform: translateY(-50%); border-radius: 50%;
+  background: var(--wds-background-elevated-normal);
+  border: 2px solid var(--wds-line-normal-normal);
+}
+.kilpip i {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  font-style: normal; font-size: 9px; font-weight: 700; line-height: 1;
+  color: var(--wds-label-assistive); white-space: nowrap;
+}
+.kilpip.done { background: var(--wds-primary-normal); border-color: var(--wds-primary-normal); }
+.kilpip.done i { color: var(--wds-primary-normal); }
+.kilpip.next { border-color: var(--wds-status-cautionary); }
+.kilpip.next i { color: var(--wds-status-cautionary); }
+
+/* ── 잡은 기물 (시계 바로 위) ── */
+.clockbox { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+.taken {
+  display: flex; align-items: center; gap: 1px;
+  /* 비었을 때와 찼을 때 높이가 같아야 한다. 1px만 달라져도 바가 커지고 판이 줄어든다. */
+  height: 18px; font-size: 14px; line-height: 1.3; max-width: 168px;
+  /* 줄을 늘리지 않는다 — 늘어나면 바가 높아지고 판이 줄어든다.
+     대신 우세 숫자를 앞에 둬서, 기물이 넘쳐 잘려도 숫자는 남는다. */
+  flex-wrap: nowrap; overflow: hidden; justify-content: flex-end;
+}
+.taken.none { font-size: var(--wds-caption-size); color: var(--wds-label-assistive); }
+.tkpc.wp { color: var(--piece-white); text-shadow: 0 0 1px var(--piece-white-edge); }
+.tkpc.bp { color: var(--piece-black); text-shadow: 0 0 1px var(--piece-black-edge); }
+.tkadv {
+  flex: 0 0 auto; order: -1;                     /* 잘려도 남도록 맨 앞 */
+  font-size: var(--wds-caption-size); font-weight: 800;
+  color: var(--wds-status-positive); margin-right: var(--wds-space-4);
+}
+.tkpc { flex: 0 0 auto; }
+
+/* ── 살펴보기 — 둘 수는 없고 사거리만 보는 중 ──
+   '둘 수 있는 칸'(primary 파랑)과 헷갈리면 안 되므로 다른 색을 쓴다.
+   status 색은 뜻이 있으니 피하고, accent 램프의 보라를 쓴다. */
+.sq.peek::after {
+  content: ''; position: absolute; left: 50%; top: 50%;
+  width: 26%; height: 26%; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--wds-cat-2); opacity: .55; pointer-events: none;
+}
+.sq.peekcap { box-shadow: inset 0 0 0 3px var(--wds-cat-2); }
+.sq.peekfrom {
+  box-shadow: inset 0 0 0 3px var(--wds-cat-2);
+  background-image: radial-gradient(circle at center,
+    color-mix(in srgb, var(--wds-cat-2) 26%, transparent) 0%, transparent 62%);
+}
+
+/* ═══════════════ 도약 경로 ═══════════════ */
+/* 나이트처럼 건너뛰는 수는 어떻게 간 것인지가 안 보인다.
+   지나간 칸에 순번을 찍어 두는 쪽도 상대도 같은 길을 보게 한다. */
+.sq.pathstep::after {
+  content: ''; position: absolute; inset: 14%;
+  border: 2px dashed var(--wds-status-cautionary);
+  border-radius: 50%; opacity: .85; pointer-events: none;
+}
+/* 경로 위에 기물이 서 있어도 순번이 읽혀야 한다 → 가운데가 아니라 모서리에 */
+.pathno {
+  position: absolute; left: 3px; top: 2px; z-index: 4;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: var(--wds-status-cautionary); color: var(--wds-static-white);
+  font-size: 10px; font-weight: 800; line-height: 1; pointer-events: none;
+}
+.sq.pathfrom { box-shadow: inset 0 0 0 3px var(--wds-status-cautionary); }
+.sq.pathend {
+  box-shadow: inset 0 0 0 3px var(--wds-status-cautionary);
+  background-image: radial-gradient(circle at center,
+    color-mix(in srgb, var(--wds-status-cautionary) 30%, transparent) 0%, transparent 62%);
+}
+
+/* 항복 — 되돌릴 수 없는 동작이라 negative */
+.nav.danger { color: var(--wds-status-negative); border-color: var(--wds-line-status-negative-normal); }
+.nav.danger:hover { background: var(--wds-background-status-negative); border-color: var(--wds-status-negative); }
+
+
+/* ═══════════════ 배경 ═══════════════
+   판이 주인공이다. 배경은 "있는 줄 모르게" 깔리되, 허전하지는 않게.
+   색은 전부 accent 램프에서 아주 낮은 투명도로 가져온다 —
+   status 색(빨강·초록·주황)은 이 화면에서 이미 뜻이 있어서 배경에 쓰면 오독된다.
+   ──────────────────────────────────────────────────────────── */
+
+/* 1) 은은한 색 번짐. 화면 모서리에서 빛이 스며드는 정도. */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(1100px 720px at 8% -12%,
+      color-mix(in srgb, var(--wds-cat-1) 13%, transparent), transparent 60%),
+    radial-gradient(900px 640px at 104% 6%,
+      color-mix(in srgb, var(--wds-cat-4) 11%, transparent), transparent 58%),
+    radial-gradient(1200px 800px at 46% 118%,
+      color-mix(in srgb, var(--wds-cat-2) 10%, transparent), transparent 62%);
+}
+
+/* 2) 체스판 결. 64px 격자를 아주 흐리게 깔고 가운데만 남긴다(가장자리 소실). */
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 68px 68px, 68px 68px;
+  -webkit-mask-image: radial-gradient(circle at 50% 42%, #000 0%, transparent 76%);
+  mask-image: radial-gradient(circle at 50% 42%, #000 0%, transparent 76%);
+}
+
+/* 3) 커다란 기물 글리프 몇 개. 아주 느리게 떠다닌다. */
+#bgart { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.bgp {
+  position: absolute; line-height: 1;
+  color: var(--bg-glyph);
+  filter: blur(0.4px);
+  animation: bgdrift 34s ease-in-out infinite;
+  will-change: transform;
+}
+.bgp.p1 { font-size: 420px; left: -110px; top: -80px;  animation-duration: 41s; }
+.bgp.p2 { font-size: 260px; right: 4%;   top: 6%;      animation-duration: 33s; animation-delay: -6s; }
+.bgp.p3 { font-size: 320px; right: -70px; bottom: -90px; animation-duration: 47s; animation-delay: -14s; }
+.bgp.p4 { font-size: 200px; left: 16%;   bottom: 2%;   animation-duration: 37s; animation-delay: -21s; }
+.bgp.p5 { font-size: 150px; left: 46%;   top: -30px;   animation-duration: 29s; animation-delay: -9s; }
+.bgp.p6 { font-size: 230px; left: 2%;    top: 48%;     animation-duration: 43s; animation-delay: -17s; }
+
+@keyframes bgdrift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50%      { transform: translate3d(14px, -18px, 0) rotate(2.5deg); }
+}
+
+/* 움직임을 줄이도록 설정한 사람에게는 흐르지 않게 한다 */
+@media (prefers-reduced-motion: reduce) {
+  .bgp { animation: none; }
+}
+
+/* 메인 화면에서도 배경 장식이 보이게 한다 (제일 허전하던 곳).
+   그러려면 #home 을 투명하게 둬야 하는데, 그러면 밑에 깔린 게임 화면까지 비친다.
+   → 메인에 있는 동안에는 게임 화면 자체를 감춘다. */
+#home { background: transparent; }
+#home::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: color-mix(in srgb, var(--wds-background-normal-alternative) 55%, transparent);
+}
+body.athome > header,
+body.athome > main { visibility: hidden; }

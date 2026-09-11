@@ -41,6 +41,7 @@
     const h = impl(id)[hook];
     if (typeof h !== 'function') return;
     const before = snap(Game.G);
+    Game.G.lastSwap = null;
     try { await h(Game.G, side, apiFor(side), ctx); }
     catch (err) { console.error('증강 오류', id, hook, err); }
     const changed = diffSnap(before, snap(Game.G));
@@ -50,7 +51,17 @@
       pushLog(`⚡ [${id}] ${a.piece} ${a.tier}개 발동 — ${a.text}`);
       if (Game.api && Game.api.flash) Game.api.flash(changed, id, side);
     }
+    /* 교환이 일어났으면 '누구와 바뀌었는지' 를 그 증강 카드에 적어 둔다.
+       온라인으로는 안 보낸다 — 비밀 증강이면 카드의 메모가 곧 정체다.
+       상대는 진행 기록의 '⇄ …' 줄로 같은 내용을 본다. */
+    if (Game.G.lastSwap) {
+      Game.augNotes[side][id] = Game.G.lastSwap;
+      Game.G.lastSwap = null;
+    }
   }
+
+  // 판마다 비운다. 지난 판의 교환 메모가 남으면 안 된다.
+  Game.augNotes = { w: {}, b: {} };
 
   /* ───────── 훅 디스패치 ───────── */
   async function fire(hook, side, ctx) {
@@ -103,21 +114,28 @@
       kills: { w: G.kills.w, b: G.kills.b },
       augs: { w: G.augs.w.length, b: G.augs.b.length },
     });
-    // 방금 남긴 스냅샷을 마지막 착수 로그 줄에 연결한다
+    /* 이번 수에 쌓인 줄을 전부 이 스냅샷에 묶는다.
+       예전에는 '→' 가 들어간 착수 줄 하나만 연결했다. 그래서 증강 획득·처치·발동 줄은
+       눌러도 아무 일이 없었다 — 정작 그때 판이 궁금한 건 그런 줄인데. */
+    const idx = G.snaps.length - 1;
     for (let i = G.log.length - 1; i >= 0; i--) {
       const e = G.log[i];
       if (e.t !== 'text') continue;
-      if (e.snap === undefined && (e.text.indexOf('→') >= 0)) { e.snap = G.snaps.length - 1; }
-      break;
+      if (e.snap !== undefined) break;        // 지난 수까지 왔으면 그만
+      e.snap = idx;
     }
   }
 
   /* ───────── 증강 획득 ───────── */
-  async function grantAug(side, id) {
+  async function grantAug(side, id, capCtx) {
     if (Game.G.augs[side].includes(id)) return;
     Game.G.augs[side].push(id);
     const a = global.AUG_BY_ID[id];
-    pushLog(`${side === 'w' ? '백' : '흑'} 증강 획득: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
+    // 비밀 증강은 기록에도 이름을 남기지 않는다.
+    // (온라인에서는 이 줄이 그대로 상대에게 넘어가고, AI전에서도 기록만 읽으면 다 보였다)
+    pushLog(a.secret && !Game.G.revealed[id]
+      ? `${side === 'w' ? '백' : '흑'} 증강 획득: 비밀 (${a.piece} ${a.tier}개) — 발동 전까지 비공개`
+      : `${side === 'w' ? '백' : '흑'} 증강 획득: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
     if (!a.secret) {
       Game.G.revealed[id] = true;
       if (Game.api && Game.api.announce) Game.api.announce(side, id, 'gain');
@@ -125,6 +143,19 @@
       Game.api.announce(side, id, 'secret');       // 무엇인지는 가리고 획득 사실만 알린다
     }
     await fire2(id, 'onGain', side, null);
+
+    // 이 증강을 열어준 처치도 그 증강의 대상이다.
+    // onCapture 는 드래프트보다 먼저 돌기 때문에, 이렇게 한 번 더 흘려보내지 않으면
+    // P1c("적을 처치한 폰이 …") · B3c("방금 적을 처치한 비숍이 …") 처럼
+    // 조건을 만들어 준 바로 그 수에서 정작 발동하지 않는다.
+    if (capCtx && typeof impl(id).onCapture === 'function') {
+      const still = Game.G.bd[capCtx.to];
+      // regrant 표시 — '조건을 만든 그 처치' 에는 걸리면 안 되는 증강이 골라낼 수 있게 한다
+      if (still && still.id === capCtx.mover.id) {
+        await fire2(id, 'onCapture', side, Object.assign({}, capCtx, { regrant: true }));
+      }
+    }
+
     if (Game.onUpdate) Game.onUpdate('augs');
   }
   Game.grantAug = grantAug;
@@ -134,6 +165,8 @@
     if (Game.G.revealed[id]) return;
     Game.G.revealed[id] = true;
     const owner = Game.G.augs.w.includes(id) ? 'w' : (Game.G.augs.b.includes(id) ? 'b' : null);
+    const a = global.AUG_BY_ID[id];
+    if (a) pushLog(`${owner === 'w' ? '백' : '흑'} 비밀 증강 공개: [${id}] ${a.piece} ${a.tier}개 — ${a.text}`);
     if (owner && Game.api && Game.api.announce) Game.api.announce(owner, id, 'reveal');
   }
   Game.revealAug = revealAug;
@@ -146,7 +179,7 @@
   function nextThreshold(G, side) {
     const i = G.tierIdx[side];
     if (i >= global.TIERS.length) return null;
-    return Math.max(0, global.TIERS[i] - G.thrCut[side]);
+    return global.TIERS[i];
   }
   Game.nextThreshold = nextThreshold;
 
@@ -184,7 +217,7 @@
   }
 
   // byKo = '무엇으로 잡았는가'. 원안의 "어떤 기물로 적을 죽였냐에 따라" 기준.
-  async function runDrafts(side, byKo) {
+  async function runDrafts(side, byKo, capCtx) {
     const G = Game.G;
     let guard = 0;
     while (guard++ < 8) {
@@ -212,10 +245,19 @@
             round: r + 1, rounds, byKo,
           });
         }
-        if (chosenId) await grantAug(side, chosenId);
+        if (global.Stats) {
+          global.Stats.picked({
+            side, ply: G.ply, tier, piece: cell.ko,
+            offer: cell.offer, chosen: chosenId, isAI,
+          });
+        }
+        if (chosenId) await grantAug(side, chosenId, capCtx);
       }
     }
   }
+
+  // 상태를 받은 쪽이 자기 기록용 스냅샷을 남길 때 쓴다
+  Game.recordSnapshot = function (side, from, to) { pushSnapshot(side, from, to); };
 
   /* ───────── 이동 실행 ───────── */
   Game.legalFor = function (sq) {
@@ -243,6 +285,7 @@
     // 처치 대상 확인
     let victim = G.bd[move.to];
     let victimSq = move.to;
+    let capCtx = null;               // 이 수로 일어난 처치 (드래프트로 얻은 증강에도 넘겨준다)
     if (move.ep) { victimSq = E.idx(move.from >> 3, move.to & 7); victim = G.bd[victimSq]; }
 
     // 플래그 소모
@@ -259,7 +302,10 @@
       promo: move.promo || null,
       castle: move.castle || null,
       victim: victim ? victim.type : null,
+      // 도약이면 지나간 칸. 상대 화면에서도 같은 경로를 보여 주려고 판에 남긴다.
+      path: moverType === 'n' ? E.leapPath(from, move.to) : [],
     };
+    if (global.Stats) global.Stats.moved(side, moverType, victim ? victim.type : null);
 
     // 처치 처리
     if (victim) {
@@ -276,7 +322,8 @@
         Game.G.revealed['B6a'] = true;
         pushLog('B6a — 비숍을 처치한 기물이 함께 죽었습니다.');
       }
-      if (G.bd[move.to]) await fire('onCapture', side, { from, to: move.to, mover, victim, victimSq });
+      capCtx = { from, to: move.to, mover, victim, victimSq };
+      if (G.bd[move.to]) await fire('onCapture', side, capCtx);
     } else {
       pushLog(`${side === 'w' ? '백' : '흑'} ${E.KO[mover.type]} ${E.sqName(from)}→${E.sqName(move.to)}`);
     }
@@ -311,7 +358,7 @@
     }
 
     // 원안 그대로 '어떤 기물로 죽였냐' 기준. 승격 전 종류를 쓴다.
-    await runDrafts(side, victim ? E.KO[moverType] : null);
+    await runDrafts(side, victim ? E.KO[moverType] : null, capCtx);
     if (G.result) return;
 
     // 시계: 이번 수에 쓴 시간을 차감하고 증분을 더한다
@@ -339,10 +386,88 @@
     pushSnapshot(side, from, move.to);
 
     // 상대가 둔 직후 훅 (증강 소유자 기준)
+    // 구현이 B1b 하나뿐이고 사람에게 묻지 않는다 → 둔 쪽에서 돌려도 안전하다
     await fire('onOppMoved', opp(side), { move });
+
+    // 온라인 대전의 경계.
+    // beginTurn 안에는 onSched(B3c 부활 선택) 처럼 '차례가 시작되는 쪽'이 답해야 하는
+    // 프롬프트가 들어 있다. 그래서 여기서 판을 넘기고, beginTurn 은 상대 화면에서 돈다.
+    if (Game.mode === 'online') {
+      global.Net.push({ side, from, to: move.to });
+      return;
+    }
 
     await beginTurn(G.turn);
   }
+
+  /* ───────── 온라인: 받은 판을 채택하고, 내 차례면 턴을 연다 ───────── */
+  Game.adoptRemote = async function (s) {
+    const G = Game.G;
+    if (!G || Game.mode !== 'online') return;
+
+    const newlyRevealed = global.Net.adopt(s) || [];
+    for (const id of newlyRevealed) {
+      const a = global.AUG_BY_ID[id];
+      if (!a || a.hidden) continue;
+      const owner = G.augs.w.includes(id) ? 'w' : (G.augs.b.includes(id) ? 'b' : null);
+      if (owner && owner !== Game.mySide && Game.api && Game.api.announce) {
+        Game.api.announce(owner, id, 'reveal');
+      }
+    }
+
+    Game.startClockTurn();
+    Game.clockPaused = false;
+    if (Game.onUpdate) Game.onUpdate('remote');
+    if (G.result) return;
+
+    // 내 차례가 아니거나(상대의 턴 시작 결과였음), 이미 이 ply 의 턴을 연 적이 있으면 끝.
+    // 두 번째 조건이 없으면 새로고침으로 재접속했을 때 예약 증강이 또 터진다.
+    if (G.turn !== Game.mySide || G.begunPly === G.ply) return;
+
+    Game.busy = true;
+    try { await beginTurn(G.turn); }
+    finally { Game.busy = false; }
+    G.begunPly = G.ply;
+
+    // beginTurn 이 판을 바꿨을 수 있다(예약 증강 부활·제거, 체크메이트 판정).
+    // 상대가 그걸 못 보면 화면이 어긋나므로 항상 한 번 되돌려 보낸다.
+    // 이 상태의 turn 은 여전히 내 색이라 상대는 beginTurn 을 돌리지 않는다 → 핑퐁이 생기지 않는다.
+    global.Net.push(null);
+    if (Game.onUpdate) Game.onUpdate('turnstart');
+  };
+
+  /* 항복. 온라인이면 상대에게도 알린다.
+     AI·2인 대전에서는 지금 둘 차례인 쪽(온라인이면 나)이 진다. */
+  Game.resign = function () {
+    const G = Game.G;
+    if (!G || G.result) return null;
+    const loser = Game.mode === 'online' ? Game.mySide : G.turn;
+    const who = loser === 'w' ? '백' : '흑';
+    if (Game.mode === 'online') global.Net.resign();
+    G.result = { winner: opp(loser), reason: `${who} 항복` };
+    pushLog(`${who} 항복 — ${loser === 'w' ? '흑' : '백'} 승리`);
+    if (Game.mode === 'online') global.Net.push(null);
+    if (Game.onUpdate) Game.onUpdate('move');
+    return loser;
+  };
+
+  /* 대국 중단 — 승패를 남기지 않고 판을 끝낸다. 항복(패배 기록)과 다르다. */
+  Game.abortGame = function (reason) {
+    const G = Game.G;
+    if (!G || G.result) return;
+    G.result = { winner: null, reason: reason || '대국을 중단했습니다', aborted: true };
+    pushLog(reason || '대국을 중단했습니다');
+    if (Game.onUpdate) Game.onUpdate('move');
+  };
+
+  // 상대가 항복했거나 연결이 끊겨 내가 이기는 경우
+  Game.finishOnline = function (winner, reason) {
+    const G = Game.G;
+    if (!G || G.result) return;
+    G.result = { winner, reason };
+    pushLog(reason);
+    if (Game.onUpdate) Game.onUpdate('move');
+  };
 
   function checkEncircle(G, side) {
     if (!E.ownsAug(G, side, 'K11b')) return false;
@@ -515,10 +640,15 @@
   Game.checkFlag = function () {
     const G = Game.G;
     if (!G || !G.clock || G.result || Game.clockPaused) return false;
+    // 온라인에서는 자기 차례일 때만 판정한다.
+    // 상대가 증강을 고르느라 시계를 멈췄는지는 이쪽에서 알 수 없어서,
+    // 남의 시계를 대신 재면 멀쩡한 사람을 시간패로 만든다.
+    if (Game.mode === 'online' && G.turn !== Game.mySide) return false;
     if (Game.clockRemain(G.turn) <= 0) {
       G.clock[G.turn] = 0;
       G.result = { winner: opp(G.turn), reason: '시간 초과' };
       pushLog(`${G.turn === 'w' ? '백' : '흑'} 시간 초과 — ${G.turn === 'w' ? '흑' : '백'} 승리`);
+      if (Game.mode === 'online') global.Net.push(null);
       return true;
     }
     return false;
@@ -529,11 +659,15 @@
     if (Game.clockPaused || !Game.G || !Game.G.clock) return;
     Game.chargeClockSilently();
     Game.clockPaused = true;
+    // 상대 화면에서도 내 시계가 멈춰 보이게 한다 (안 그러면 내가 증강을 고르는 동안
+    // 상대 화면에서는 내 시간이 계속 줄어드는 것처럼 보인다)
+    if (Game.mode === 'online') global.Net.note('pause', Game.G.clock);
   };
   Game.resumeClock = function () {
     if (!Game.clockPaused) return;
     Game.clockPaused = false;
     turnStartedAt = performance.now();
+    if (Game.mode === 'online') global.Net.note('resume', Game.G.clock);
   };
   Game.chargeClockSilently = function () {
     const G = Game.G;
@@ -550,7 +684,13 @@
     return !(Game.mode === 'ai' && side === Game.aiSide);
   };
   Game.humanSide = function () {
+    if (Game.mode === 'online') return Game.mySide;
     return Game.mode === 'ai' ? opp(Game.aiSide) : Game.G.turn;
+  };
+  // 이 화면에서 지금 둘 수 있는가 (온라인이면 내 차례일 때만)
+  Game.myTurn = function () {
+    if (Game.mode !== 'online') return true;
+    return Game.G.turn === Game.mySide;
   };
 
   /* ───────── AI ───────── */
@@ -592,6 +732,7 @@
     Game.G = E.newGame();
     Game.mode = (opts && opts.mode) || 'pvp';
     Game.aiSide = (opts && opts.aiSide) || 'b';
+    Game.mySide = (opts && opts.mySide) || 'w';        // 온라인에서 내가 잡은 색
     if (opts && opts.difficulty) Game.difficulty = opts.difficulty;
     if (opts && opts.timeControl !== undefined) Game.timeControl = opts.timeControl;
     const tc = Game.timeControl;
@@ -603,8 +744,15 @@
     global.ensureAugImpls();
     pushLog(Game.mode === 'ai'
       ? `게임 시작 — AI 대전 (난이도: ${global.AI.LEVELS[Game.difficulty].label}). 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.`
-      : '게임 시작 — 2인 대전. 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.');
+      : Game.mode === 'online'
+        ? `게임 시작 — 온라인 대전 (나: ${Game.mySide === 'w' ? '백' : '흑'}). 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.`
+        : '게임 시작 — 2인 대전. 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.');
+    // 시작 국면도 한 장 남긴다. 안 그러면 '게임 시작' 줄이 첫 수 뒤 판에 붙어 버린다.
+    pushSnapshot(null, -1, -1);
     if (Game.onUpdate) Game.onUpdate('start');
+    // 방을 만든 쪽(백)이 첫 판을 넘겨 양쪽 기물 id 를 맞춘다.
+    // 재접속으로 들어온 경우에는 보내면 안 된다 — 서버가 갖고 있는 진행 중인 판을 덮어쓴다.
+    if (Game.mode === 'online' && opts && opts.pushInitial) global.Net.push(null);
     maybeAI();
   };
 })(window);

@@ -26,6 +26,9 @@
     return { id: ++UID, type, color, moved: false, augLost: false };
   }
 
+  // 온라인 대전에서 상대가 만든 판을 채택할 때, 그쪽 id 보다 뒤에서 다시 세게 한다
+  function bumpUID(n) { if (n > UID) UID = n; }
+
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
 
   function newGame() {
@@ -45,7 +48,6 @@
       kills: { w: 0, b: 0 },         // 처치 카운트
       augs: { w: [], b: [] },        // 보유 증강 id
       tierIdx: { w: 0, b: 0 },       // 소비한 티어 수(0~4)
-      thrCut: { w: 0, b: 0 },        // K1d: 필요 처치 수 감소
       eff: [],                       // 활성 효과
       phased: [],                    // 포영 {pc, sq, owner, until, data}
       grave: { w: [], b: [] },       // 처치/제거된 아군 기물 (부활용)
@@ -54,6 +56,7 @@
       log: [],
       hist: [],                      // UCI 기보 (오프닝 북 조회용)
       lastBySide: { w: null, b: null },  // 진영별 마지막 수 (스트립 표시용)
+      begunPly: -1,                  // beginTurn 을 이미 돌린 ply (온라인 재접속 시 중복 발동 방지)
       snaps: [],                     // 수마다의 판 스냅샷 (기록에서 되돌려 보기용)
       clock: null,                   // {w, b, inc, limit} ms. null 이면 무제한
       result: null,                  // {winner, reason}
@@ -92,8 +95,13 @@
   // 지속시간 계산. 증강 획득/발동 시점은 "내 수를 둔 직후"이므로
   //   내 N턴   = 2N 플라이
   //   상대 N턴 = 2N-1 플라이
-  function untilMyTurns(G, n) { return G.ply + 2 * n; }
-  function untilOppTurns(G, n) { return G.ply + 2 * n - 1; }
+  /* 두 헬퍼 모두 '호출 시점의 G.ply 는 효과 주인의 턴 ply' 라는 전제 위에 있다.
+     (onGain / onCapture / onAfterMove / onTurnStart / onCheck / onOppMoved 전부 그렇다)
+       주인의 턴 = P, P+2, P+4 …   /   상대의 턴 = P+1, P+3 …
+     만료 검사(expireEffects)와 포영 복귀(returnPhased)는 G.ply 가 오른 '뒤'에 돌므로,
+     until 은 "이 ply 가 되는 순간 사라진다" 를 뜻한다. */
+  function untilMyTurns(G, n) { return G.ply + 2 * n; }        // 내 n번째 다음 턴이 시작될 때
+  function untilOppTurns(G, n) { return G.ply + 2 * n; }       // 상대의 다음 n턴을 모두 덮는다
 
   function addEff(G, e) {
     e.uid = ++UID;
@@ -219,6 +227,11 @@
     G.bd[a] = pb; G.bd[b] = pa;
     if (inCheck(G, 'w') || inCheck(G, 'b')) { G.bd[a] = pa; G.bd[b] = pb; return false; }
     G.log.push({ t: 'swap', a, b });
+    /* '교환했습니다' 만으로는 무엇이 어디로 갔는지 알 수가 없다. 둘 다 이름과 칸을 적는다.
+       증강 id 는 여기 안 쓴다 — 비밀 증강이면 기록으로 정체가 새기 때문이다. */
+    const nm = c => (c === 'w' ? '백' : '흑');
+    G.lastSwap = `${nm(pa.color)} ${KO[pa.type]} ${sqName(a)} ↔ ${nm(pb.color)} ${KO[pb.type]} ${sqName(b)}`;
+    G.log.push({ t: 'text', text: '⇄ ' + G.lastSwap + ' 위치 교환' });
     return true;
   }
 
@@ -241,6 +254,30 @@
 
   function mv(from, to, extra) {
     return Object.assign({ from, to }, extra || {});
+  }
+
+  /* 도약 기물이 '어떻게 갔는지'.
+     실제로는 건너뛰므로 중간 칸이 막혀도 상관없지만, 그래서 더더욱
+     어떤 길로 간 것인지 눈에 보여야 두는 쪽도 상대도 납득한다.
+     from 과 to 는 빼고, 지나간 칸만 순서대로 돌려준다. */
+  function leapPath(from, to) {
+    const [r0, c0] = rc(from), [r1, c1] = rc(to);
+    const dr = r1 - r0, dc = c1 - c0;
+    const ar = Math.abs(dr), ac = Math.abs(dc);
+    const sr = Math.sign(dr), sc = Math.sign(dc);
+
+    // 보통 나이트 (2,1) — 긴 쪽으로 두 칸 간 뒤 옆으로 한 칸
+    if (ar === 2 && ac === 1) return [idx(r0 + sr, c0), idx(r0 + dr, c0)];
+    if (ac === 2 && ar === 1) return [idx(r0, c0 + sc), idx(r0, c0 + dc)];
+
+    // N11b (4,2) — 직선으로 두 칸 + 대각선으로 두 칸
+    if (ar === 4 && ac === 2) {
+      return [idx(r0 + sr, c0), idx(r0 + 2 * sr, c0), idx(r0 + 3 * sr, c0 + sc)];
+    }
+    if (ac === 4 && ar === 2) {
+      return [idx(r0, c0 + sc), idx(r0, c0 + 2 * sc), idx(r0 + sr, c0 + 3 * sc)];
+    }
+    return [];
   }
 
   function slide(G, from, dirs, side, out, phaseAllow) {
@@ -318,12 +355,16 @@
         out.push(mv(from, idx(r2, c0), { double: true }));
       }
     }
-    // P1b: 다음 1회 두 번 전진 (총 3칸)
+    // P1b: 다음 1회 두 번 전진.
+    // 아직 안 움직인 폰이면 (2칸 + 1칸) = 3칸, 이미 움직인 폰이면 (1칸 + 1칸) = 2칸이 최대다.
     if (G.flags[side].P1b > 0) {
-      const rr = [r0 + dir, r0 + dir * 2, r0 + dir * 3];
-      if (onBoard(rr[2], c0) && rr.every(r => onBoard(r, c0) && !G.bd[idx(r, c0)])) {
-        out.push(mv(from, idx(rr[2], c0), { p1b: true }));
+      const far = G.bd[from].moved ? 2 : 3;
+      let clear = true;
+      for (let k = 1; k <= far; k++) {
+        const r = r0 + dir * k;
+        if (!onBoard(r, c0) || G.bd[idx(r, c0)]) { clear = false; break; }
       }
+      if (clear) push(idx(r0 + dir * far, c0), { p1b: true });
     }
     // 대각 처치
     for (let k = 1; k <= step; k++) {
@@ -655,7 +696,7 @@
 
   global.Engine = {
     FILES, VALUE, KO, KO2T, START,
-    rc, idx, onBoard, sqName, other, lightSquare, mkPiece,
+    rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
     untilMyTurns, untilOppTurns, addEff, effs, hasEff, dropEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,

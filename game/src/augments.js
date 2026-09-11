@@ -287,10 +287,17 @@
   });
 
   def('N1c', {
+    async onGain(G, side) { G.flags[side].N1c = 1; },
     async onCapture(G, side, api, ctx) {
+      // 이 증강을 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
+      if (ctx.regrant) return;
       if (ctx.mover.type !== 'n') return;
+      if (!(G.flags[side].N1c > 0)) return;
       const n = wipe(G, adj(ctx.to), side);
-      if (n) api.msg(`N1c — 나이트 주변 기물 ${n}개를 제거했습니다. (아군 포함, 킹 제외)`);
+      // 주변이 비어 있었으면 쓴 것으로 치지 않는다 — 허공에 날리면 억울하다
+      if (!n) { api.msg('N1c — 나이트 주변에 제거할 기물이 없었습니다. (아직 1회 남음)'); return; }
+      G.flags[side].N1c--;
+      api.msg(`N1c — 나이트 주변 기물 ${n}개를 제거했습니다. (아군 포함, 킹 제외 · 남은 횟수 0)`);
     }
   });
 
@@ -350,12 +357,9 @@
   def('N6a', {
     async onAfterMove(G, side, api, ctx) {
       if (ctx.mover.type !== 'n') return;
-      const [r0, c0] = rc(ctx.move.from), [r1, c1] = rc(ctx.move.to);
-      const dr = r1 - r0, dc = c1 - c0;
-      // L자 경로의 중간 두 칸
-      const path = [];
-      if (Math.abs(dr) === 2) { path.push(idx(r0 + Math.sign(dr), c0), idx(r0 + dr, c0)); }
-      else { path.push(idx(r0, c0 + Math.sign(dc)), idx(r0, c0 + dc)); }
+      // 경로 계산은 엔진의 leapPath 하나로 모았다.
+      // 여기서 따로 세던 시절에는 N11b(범위 2배)를 만나면 엉뚱한 칸을 집었다.
+      const path = E.leapPath(ctx.move.from, ctx.move.to);
       const until = E.untilMyTurns(G, 2);
       let n = 0;
       for (const s of path) if (s !== ctx.move.to && G.bd[s] && E.phaseOut(G, s, until)) n++;
@@ -416,7 +420,7 @@
         G.bd[sq] = p; ids.push(p.id);
       }
       if (ids.length) {
-        untarget(G, side, ids, E.untilMyTurns(G, 1));
+        untarget(G, side, ids, E.untilOppTurns(G, 1));
         api.msg(`N11a — 나이트 ${ids.length}개를 소환했습니다. (1턴 지정불가)`);
       }
     }
@@ -526,17 +530,32 @@
   def('B3b', parityPawn(false, 'B3b'));
 
   def('B3c', {
+    // 원문은 "방금 적을 처치한 비숍이". 이 증강을 열어준 처치도 game.js 의 grantAug 가
+    // 여기로 한 번 더 흘려보내 주므로, 그 비숍부터 지켜보게 된다.
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'b') return;
-      sched(G, side, 'B3c', E.untilMyTurns(G, 1), { watchId: ctx.mover.id });
+      sched(G, side, 'B3c', E.untilMyTurns(G, 2), { watchId: ctx.mover.id });
     },
     async onSched(G, side, api, e) {
       const alive = E.piecesOf(G, side).some(i => G.bd[i].id === e.watchId);
       if (!alive) return;
+      // 스폰 칸이 막힌 종류는 고른 뒤에 '불가' 를 보여주지 않고, 처음부터 잠가서 보여준다.
       const gy = [...new Set(G.grave[side])].filter(t => t !== 'k');
       if (!gy.length) return;
-      const t = await api.pickOption('B3c — 부활시킬 아군 기물을 고르세요',
-        gy.map(x => ({ label: E.KO[x], value: x })));
+      const opts = gy.map(x => {
+        const free = spawnSquaresFor(side, x).filter(s => !G.bd[s]);
+        const home = spawnSquaresFor(side, x).map(E.sqName).join(' · ');
+        return {
+          label: E.KO[x], value: x,
+          desc: free.length ? `스폰 칸 ${free.map(E.sqName).join(' · ')}` : `스폰 칸(${home})이 막혀 있습니다`,
+          block: free.length ? null : '스폰 칸이 비어 있지 않습니다',
+        };
+      });
+      if (!opts.some(o => !o.block)) {
+        api.msg('B3c — 부활할 기물의 스폰 칸이 모두 막혀 있습니다.');
+        return;
+      }
+      const t = await api.pickOption('B3c — 부활시킬 아군 기물을 고르세요', opts);
       if (!t) return;
       const spawns = spawnSquaresFor(side, t).filter(s => !G.bd[s]);
       if (!spawns.length) { api.msg('B3c — 스폰 위치가 비어있지 않아 부활할 수 없습니다.'); return; }
@@ -603,7 +622,7 @@
       const p = G.bd[ctx.checkerSq];
       if (!p) return;
       G.flags[side].B11a = 0;
-      untarget(G, side, [p.id], E.untilMyTurns(G, 1));
+      untarget(G, side, [p.id], E.untilOppTurns(G, 1));
       api.reveal('B11a');
       api.msg(`B11a — 체크를 건 ${E.sqName(ctx.checkerSq)} 기물이 1턴 동안 지정불가 상태가 되었습니다.`);
     }
@@ -693,15 +712,14 @@
   });
 
   def('Q3b', {
-    async onGain(G, side) { G.flags[side].Q3b = (G.flags[side].Q3b || 0) + 1; },
-    canActivate(G, side) { return G.flags[side].Q3b > 0 && ownSquares(G, side, 'q').length > 0; },
-    async activate(G, side, api) {
+    /* 예전에는 '충전' 을 주고 다음 내 차례에 눌러 쓰게 했다.
+       그러면 증강을 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
+       다른 포영 증강처럼 증강을 얻는 그 턴에 바로 걸리게 한다. */
+    async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
-      if (q === undefined) return false;
+      if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       E.phaseOut(G, q, E.untilOppTurns(G, 1));
-      G.flags[side].Q3b--;
-      api.msg('Q3b — 아군 퀸이 포영되었습니다.');
-      return true;
+      api.msg('Q3b — 아군 퀸이 다음 상대턴 동안 포영되었습니다.');
     }
   });
 
@@ -792,12 +810,6 @@
 
   def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 강화에서 선택지를 2개 고릅니다.'); } });
 
-  def('K1d', {
-    async onGain(G, side, api) {
-      G.thrCut[side] += 1;
-      api.msg('K1d — 이후 강화에 필요한 처치 수가 1 줄어듭니다.');
-    }
-  });
 
   function grantFrom(pieces, tier, label) {
     return {
@@ -981,7 +993,6 @@
     K1a: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
     K1b: () => null,
     K1c: () => null,
-    K1d: (G, s) => need(G.tierIdx[s] < global.TIERS.length, '더 받을 강화가 없습니다'),
     K3a: (G, s) => need(
       global.AUGMENTS.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.augs[s].includes(a.id)),
       '얻을 수 있는 나이트·비숍 6개 강화가 없습니다'),
