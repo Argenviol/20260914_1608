@@ -51,7 +51,8 @@
       const st = global.TERM_STYLES[t];
       if (!st) continue;
       html = html.split(t).join(
-        `<span class="tw" style="color:${st.fg};background:${st.bg};border-color:${st.line}">${t}</span>`);
+        `<span class="tw" data-term="${t}" role="button" tabindex="0" title="눌러서 뜻 보기"` +
+        ` style="color:${st.fg};background:${st.bg};border-color:${st.line}">${t}</span>`);
     }
     return html;
   }
@@ -77,6 +78,8 @@
       if (!st) continue;
       const g = global.GLOSSARY.find(x => x.term === t);
       const tag = el('span', 'ttag', '#' + t);
+      tag.dataset.term = t;
+      tag.setAttribute('role', 'button');
       tag.style.color = st.fg;
       tag.style.background = st.bg;
       tag.style.borderColor = st.line;
@@ -84,6 +87,67 @@
       wrap.appendChild(tag);
     }
     return wrap;
+  }
+
+  /* 용어를 누르면 뜻을 띄운다.
+     증강을 고르는 화면에서는 용어가 '카드' 버튼 안에 들어 있다. 그냥 두면 뜻을 보려다
+     그 증강이 골라져 버린다. 그래서 캡처 단계에서 먼저 잡고 클릭을 거기서 끊는다. */
+  let termPop = null;
+
+  function closeTermPop() {
+    if (termPop) { termPop.remove(); termPop = null; }
+  }
+
+  function showTermPop(term, anchor) {
+    closeTermPop();
+    const gl = (global.GLOSSARY || []).find(x => x.term === term);
+    if (!gl) return;
+    const st = global.TERM_STYLES[term];
+    const pop = el('div', 'termpop');
+    const head = el('div', 'termpophead');
+    const chip = el('span', 'tw', term);
+    if (st) { chip.style.color = st.fg; chip.style.background = st.bg; chip.style.borderColor = st.line; }
+    head.appendChild(chip);
+    const x = el('button', 'termpopx', '✕');
+    x.title = '닫기';
+    x.onclick = closeTermPop;
+    head.appendChild(x);
+    pop.appendChild(head);
+    pop.appendChild(el('div', 'termpopbody', gl.desc));
+    document.body.appendChild(pop);
+
+    // 누른 자리 바로 아래. 화면 밖으로 나가면 안쪽으로 당긴다.
+    const r = anchor.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+    let top = r.bottom + 8;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 8);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    termPop = pop;
+  }
+
+  function wireTerms() {
+    document.addEventListener('pointerdown', (ev) => {
+      const t = ev.target.closest && ev.target.closest('[data-term]');
+      if (!t) {
+        if (!(ev.target.closest && ev.target.closest('.termpop'))) closeTermPop();
+        return;
+      }
+      ev.preventDefault();
+      ev.stopPropagation();              // 증강 카드가 골라지지 않게
+      showTermPop(t.dataset.term, t);
+      SFX().pick();
+    }, true);
+    // pointerdown 을 막아도 click 은 따로 온다. 그것도 카드에 닿지 않게 끊는다.
+    document.addEventListener('click', (ev) => {
+      if (ev.target.closest && ev.target.closest('[data-term]')) {
+        ev.stopPropagation(); ev.preventDefault();
+      }
+    }, true);
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeTermPop(); });
+    window.addEventListener('resize', closeTermPop);
   }
 
   /* ───────── 전적 기록 (localStorage) ───────── */
@@ -181,7 +245,7 @@
       const [r, c] = E.rc(i);
       const sq = el('div', 'sq ' + (E.lightSquare(i) ? 'light' : 'dark'));
       sq.dataset.i = i;
-      if (i === review.from || i === review.to) sq.classList.add('last');
+      if (review.from >= 0 && (i === review.from || i === review.to)) sq.classList.add('last');
       const code = review.board[i];
       if (code) {
         sq.appendChild(el('div', 'pc ' + (code[1] === 'w' ? 'wp' : 'bp'), GLYPH[code[0]]));
@@ -211,9 +275,10 @@
     bar.innerHTML = '';
     const prev = el('button', 'skipbtn', '← 이전');
     const next = el('button', 'skipbtn', '다음 →');
-    const info = el('span', null,
-      `${snap.moveNo}수째 · ${snap.side === 'w' ? '백' : '흑'}이 둔 뒤의 국면` +
-      ` · 처치 백${snap.kills.w}·흑${snap.kills.b}`);
+    const info = el('span', null, snap.side
+      ? `${snap.moveNo}수째 · ${snap.side === 'w' ? '백' : '흑'}이 둔 뒤의 국면` +
+        ` · 처치 백${snap.kills.w}·흑${snap.kills.b}`
+      : '시작 국면');
     const back = el('button', 'nav', '현재로 돌아가기');
     prev.onclick = () => enterReview(Math.max(0, idx - 1));
     next.onclick = () => (idx + 1 < g.snaps.length ? enterReview(idx + 1) : exitReview());
@@ -634,7 +699,7 @@
     renderTabPanel();
   }
 
-  function augCard(id, dimSecret) {
+  function augCard(id, dimSecret, side) {
     const g = G();
     const a = global.AUG_BY_ID[id];
     // 모르는 id (가면 해독 실패 등) 로 화면 전체가 멈추지는 않게 한다
@@ -655,6 +720,14 @@
         (a.secret ? '<span class="tag secret">◆ 비밀</span>' : '') +
         '<div class="augtext">' + termHTML(a.text, a.terms) + '</div>';
       c.insertBefore(durChip(a.tag), c.firstChild);
+      // 교환은 '누구와 바뀌었나' 를 알아야 뜻이 통한다
+      const note = side && Game().augNotes && Game().augNotes[side][id];
+      if (note) {
+        const n = el('div', 'augnote');
+        n.appendChild(el('span', 'augnotelabel', '교환'));
+        n.appendChild(el('span', null, note));
+        c.appendChild(n);
+      }
       if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
     }
     return c;
@@ -743,7 +816,7 @@
 
         const list = el('div', 'auglist');
         const dimSecret = gm.mode === 'ai' && side === gm.aiSide;
-        for (const id of g.augs[side]) list.appendChild(augCard(id, dimSecret));
+        for (const id of g.augs[side]) list.appendChild(augCard(id, dimSecret, side));
         if (!g.augs[side].length) list.appendChild(el('div', 'dim', '아직 없음'));
         box.appendChild(list);
 
@@ -787,15 +860,19 @@
     const items = g.log.filter(x => x.t === 'text').slice(-200);
     const wrap = el('div', 'loglist');
     if (g.snaps.length) {
-      wrap.appendChild(el('div', 'loghint', '착수 기록을 누르면 그때 판을 볼 수 있습니다'));
+      wrap.appendChild(el('div', 'loghint', '기록을 누르면 그때 판을 볼 수 있습니다'));
     }
+    let seenSnap = false;
     for (const x of items) {
       const line = el('div', 'line', x.text);
-      if (x.snap !== undefined) {
+      // 마지막 스냅샷 뒤에 붙은 줄(방금 발동한 증강 등)은 지금 판이 곧 그때 판이다
+      const s = x.snap !== undefined ? x.snap : (seenSnap ? g.snaps.length - 1 : undefined);
+      if (s !== undefined && g.snaps[s]) {
+        seenSnap = true;
         line.classList.add('replay');
         line.title = '이 시점의 판 보기';
-        line.onclick = () => enterReview(x.snap);
-        if (review && g.snaps[x.snap] === review) line.classList.add('viewing');
+        line.onclick = () => enterReview(s);
+        if (review && g.snaps[s] === review) line.classList.add('viewing');
       }
       // '처치 카운트 1·3·6·11' 같은 안내문까지 처치로 칠하지 않도록 실제 이벤트만 고른다
       if (x.text.indexOf('⚡') === 0) line.classList.add('aug');
@@ -859,6 +936,8 @@
   function render() {
     renderBoard(); renderStrips(); renderLastMoves();
     renderTurnbar(); renderActions(); renderTabPanel();
+    // 내가 둘 수 있으면 판 둘레가 은은하게 뛴다 — 판만 보고 있어도 차례가 보이게
+    document.body.classList.toggle('myturn', canControl());
     fitBoard();
   }
   global.renderAll = render;
@@ -1819,6 +1898,7 @@
       fitTimer = setTimeout(() => { fitBoard(); renderBoard(); }, 80);
     });
 
+    wireTerms();
     board.addEventListener('pointerdown', onPointerDown);
     board.addEventListener('pointermove', onBoardHover);
     board.addEventListener('pointerleave', () => { if (!(pathHint && pathHint.pinned)) setPathHint(null); });
@@ -1884,16 +1964,6 @@
         return;
       }
       startGame(gm.mode);
-    };
-
-    $('#abort').onclick = () => {
-      const g = G();
-      if (!g) return;
-      if (!window.confirm('이 대국을 중단할까요? 승패는 남지 않습니다.')) return;
-      if (Game().mode === 'online') { global.Net.abort(); }
-      Game().abortGame('대국을 중단했습니다');
-      leaveOnline();
-      renderHomeRecords(); showHome();
     };
 
     $('#resign').onclick = () => {

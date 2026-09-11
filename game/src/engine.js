@@ -227,6 +227,11 @@
     G.bd[a] = pb; G.bd[b] = pa;
     if (inCheck(G, 'w') || inCheck(G, 'b')) { G.bd[a] = pa; G.bd[b] = pb; return false; }
     G.log.push({ t: 'swap', a, b });
+    /* '교환했습니다' 만으로는 무엇이 어디로 갔는지 알 수가 없다. 둘 다 이름과 칸을 적는다.
+       증강 id 는 여기 안 쓴다 — 비밀 증강이면 기록으로 정체가 새기 때문이다. */
+    const nm = c => (c === 'w' ? '백' : '흑');
+    G.lastSwap = `${nm(pa.color)} ${KO[pa.type]} ${sqName(a)} ↔ ${nm(pb.color)} ${KO[pb.type]} ${sqName(b)}`;
+    G.log.push({ t: 'text', text: '⇄ ' + G.lastSwap + ' 위치 교환' });
     return true;
   }
 

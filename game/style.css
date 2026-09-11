@@ -295,6 +295,69 @@ main {
 .bar { height: 6px; background: var(--wds-fill-normal); border-radius: var(--wds-radius-full); overflow: hidden; }
 .fill { height: 100%; background: var(--wds-primary-normal); transition: width .35s; }
 
+/* ── 내 차례 ──
+   턴 바 글자만으로는 판을 보다가 놓친다. 판 둘레가 은은하게 뛰게 해서
+   판에서 눈을 떼지 않아도 차례가 왔다는 걸 알 수 있게 한다. */
+#boardwrap { position: relative; border-radius: var(--wds-radius-12); }
+#boardwrap::after {
+  content: ''; position: absolute; inset: -6px;
+  border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow .25s;
+}
+body.myturn #boardwrap::after {
+  animation: myturnpulse 2.4s ease-in-out infinite;
+}
+@keyframes myturnpulse {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--wds-primary-normal) 45%, transparent),
+                         0 0 14px 2px color-mix(in srgb, var(--wds-primary-normal) 20%, transparent); }
+  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wds-primary-normal) 85%, transparent),
+                         0 0 24px 6px color-mix(in srgb, var(--wds-primary-normal) 38%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.myturn #boardwrap::after {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--wds-primary-normal) 70%, transparent);
+  }
+}
+
+/* ── 용어 뜻 풍선 ──
+   증강을 고르는 화면에서도 눌러야 하므로 오버레이(120)보다 위에 둔다. */
+.tw[data-term] { cursor: help; }
+.ttag[data-term] { cursor: help; }
+.termpop {
+  position: fixed; z-index: 160; max-width: min(340px, 88vw);
+  background: var(--wds-background-elevated-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-10) var(--wds-space-12);
+  box-shadow: var(--wds-shadow-xlarge);
+}
+.termpophead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--wds-space-10); margin-bottom: var(--wds-space-6);
+}
+.termpopx {
+  background: transparent; border: 0; color: var(--wds-label-assistive);
+  font-size: var(--wds-label2-size); line-height: 1; padding: 2px 4px;
+}
+.termpopx:hover { color: var(--wds-label-normal); }
+.termpopbody {
+  font-size: var(--wds-label1-size); line-height: 1.65; color: var(--wds-label-neutral);
+}
+
+/* ── 증강 카드의 교환 메모 ── */
+.augnote {
+  display: flex; align-items: baseline; gap: var(--wds-space-6);
+  margin-top: var(--wds-space-8); padding-top: var(--wds-space-8);
+  border-top: 1px dashed var(--wds-line-normal-alternative);
+  font-size: var(--wds-label2-size); color: var(--wds-label-neutral);
+}
+.augnotelabel {
+  flex: 0 0 auto; font-weight: 700;
+  color: var(--wds-cat-4, var(--wds-label-alternative));
+}
+
 /* ── 마지막 수 · 증강 (탭 위) ──
    진영 스트립 안에 있을 때는 처치 눈금과 한 줄을 다투다 좁아지면 겹쳤다.
    스트립 너비가 창이 아니라 판에 딸려 있어서 창 기준으로는 막을 수도 없었다. */

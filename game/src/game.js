@@ -41,6 +41,7 @@
     const h = impl(id)[hook];
     if (typeof h !== 'function') return;
     const before = snap(Game.G);
+    Game.G.lastSwap = null;
     try { await h(Game.G, side, apiFor(side), ctx); }
     catch (err) { console.error('증강 오류', id, hook, err); }
     const changed = diffSnap(before, snap(Game.G));
@@ -50,7 +51,17 @@
       pushLog(`⚡ [${id}] ${a.piece} ${a.tier}개 발동 — ${a.text}`);
       if (Game.api && Game.api.flash) Game.api.flash(changed, id, side);
     }
+    /* 교환이 일어났으면 '누구와 바뀌었는지' 를 그 증강 카드에 적어 둔다.
+       온라인으로는 안 보낸다 — 비밀 증강이면 카드의 메모가 곧 정체다.
+       상대는 진행 기록의 '⇄ …' 줄로 같은 내용을 본다. */
+    if (Game.G.lastSwap) {
+      Game.augNotes[side][id] = Game.G.lastSwap;
+      Game.G.lastSwap = null;
+    }
   }
+
+  // 판마다 비운다. 지난 판의 교환 메모가 남으면 안 된다.
+  Game.augNotes = { w: {}, b: {} };
 
   /* ───────── 훅 디스패치 ───────── */
   async function fire(hook, side, ctx) {
@@ -103,12 +114,15 @@
       kills: { w: G.kills.w, b: G.kills.b },
       augs: { w: G.augs.w.length, b: G.augs.b.length },
     });
-    // 방금 남긴 스냅샷을 마지막 착수 로그 줄에 연결한다
+    /* 이번 수에 쌓인 줄을 전부 이 스냅샷에 묶는다.
+       예전에는 '→' 가 들어간 착수 줄 하나만 연결했다. 그래서 증강 획득·처치·발동 줄은
+       눌러도 아무 일이 없었다 — 정작 그때 판이 궁금한 건 그런 줄인데. */
+    const idx = G.snaps.length - 1;
     for (let i = G.log.length - 1; i >= 0; i--) {
       const e = G.log[i];
       if (e.t !== 'text') continue;
-      if (e.snap === undefined && (e.text.indexOf('→') >= 0)) { e.snap = G.snaps.length - 1; }
-      break;
+      if (e.snap !== undefined) break;        // 지난 수까지 왔으면 그만
+      e.snap = idx;
     }
   }
 
@@ -730,6 +744,8 @@
       : Game.mode === 'online'
         ? `게임 시작 — 온라인 대전 (나: ${Game.mySide === 'w' ? '백' : '흑'}). 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.`
         : '게임 시작 — 2인 대전. 처치 카운트 1 · 3 · 6 · 11 에서 증강을 획득합니다.');
+    // 시작 국면도 한 장 남긴다. 안 그러면 '게임 시작' 줄이 첫 수 뒤 판에 붙어 버린다.
+    pushSnapshot(null, -1, -1);
     if (Game.onUpdate) Game.onUpdate('start');
     // 방을 만든 쪽(백)이 첫 판을 넘겨 양쪽 기물 id 를 맞춘다.
     // 재접속으로 들어온 경우에는 보내면 안 된다 — 서버가 갖고 있는 진행 중인 판을 덮어쓴다.
