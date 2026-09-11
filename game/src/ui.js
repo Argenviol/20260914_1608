@@ -30,6 +30,7 @@
   let flashTimer = null;
   let drag = null;                    // {from, ghost, moved, startX, startY}
   let review = null;                  // 지난 국면을 보는 중이면 스냅샷 객체
+  let reviewIdx = -1;                 // 그 국면이 몇 번째인가 (같은 줄을 다시 누르면 나간다)
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
   let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
   let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
@@ -146,7 +147,11 @@
         ev.stopPropagation(); ev.preventDefault();
       }
     }, true);
-    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeTermPop(); });
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
+      if (termPop) { closeTermPop(); return; }
+      if (review) exitReview();
+    });
     window.addEventListener('resize', closeTermPop);
   }
 
@@ -272,23 +277,30 @@
       const col = document.querySelector('.board-col');
       col.insertBefore(bar, $('#oppstrip'));
     }
+    /* 턴 바가 있던 자리에 그대로 들어간다. 두 바의 높이가 다르면 그 차이만큼 판이
+       줄었다 늘었다 해서, 기록을 누를 때마다 화면이 출렁인다. 한 줄로 고정한다. */
     bar.innerHTML = '';
-    const prev = el('button', 'skipbtn', '← 이전');
-    const next = el('button', 'skipbtn', '다음 →');
-    const info = el('span', null, snap.side
-      ? `${snap.moveNo}수째 · ${snap.side === 'w' ? '백' : '흑'}이 둔 뒤의 국면` +
-        ` · 처치 백${snap.kills.w}·흑${snap.kills.b}`
+    const prev = el('button', 'skipbtn', '←');
+    prev.title = '이전 국면';
+    const next = el('button', 'skipbtn', '→');
+    next.title = '다음 국면';
+    const info = el('span', 'revinfo', snap.side
+      ? `${snap.moveNo}수째 · ${snap.side === 'w' ? '백' : '흑'} 둔 뒤 · 처치 ${snap.kills.w}·${snap.kills.b}`
       : '시작 국면');
-    const back = el('button', 'nav', '현재로 돌아가기');
+    info.title = info.textContent;
+    const back = el('button', 'nav small', '현재로 ✕');
+    back.title = '지금 판으로 (Esc)';
     prev.onclick = () => enterReview(Math.max(0, idx - 1));
     next.onclick = () => (idx + 1 < g.snaps.length ? enterReview(idx + 1) : exitReview());
     back.onclick = exitReview;
     bar.appendChild(prev); bar.appendChild(info); bar.appendChild(next); bar.appendChild(back);
     bar.classList.add('show');
+    reviewIdx = idx;
   }
 
   function exitReview() {
     review = null;
+    reviewIdx = -1;
     document.body.classList.remove('reviewing');
     const bar = $('#reviewbar');
     if (bar) bar.remove();
@@ -859,7 +871,11 @@
     // 진행 기록
     const items = g.log.filter(x => x.t === 'text').slice(-200);
     const wrap = el('div', 'loglist');
-    if (g.snaps.length) {
+    if (review) {
+      const b = el('button', 'logback', '지난 국면 보는 중 — 현재로 돌아가기');
+      b.onclick = exitReview;
+      wrap.appendChild(b);
+    } else if (g.snaps.length) {
       wrap.appendChild(el('div', 'loghint', '기록을 누르면 그때 판을 볼 수 있습니다'));
     }
     let seenSnap = false;
@@ -871,7 +887,8 @@
         seenSnap = true;
         line.classList.add('replay');
         line.title = '이 시점의 판 보기';
-        line.onclick = () => enterReview(s);
+        // 보고 있던 줄을 다시 누르면 현재로 돌아온다 — 나오는 길이 멀지 않게
+        line.onclick = () => (reviewIdx === s ? exitReview() : enterReview(s));
         if (review && g.snaps[s] === review) line.classList.add('viewing');
       }
       // '처치 카운트 1·3·6·11' 같은 안내문까지 처치로 칠하지 않도록 실제 이벤트만 고른다

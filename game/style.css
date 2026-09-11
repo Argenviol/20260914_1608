@@ -358,6 +358,18 @@ body.myturn #boardwrap::after {
   color: var(--wds-cat-4, var(--wds-label-alternative));
 }
 
+/* 기록 패널 안에서 바로 빠져나오는 띠 — 기록을 누르던 자리에서 손을 안 옮기게 */
+.logback {
+  position: sticky; top: 0; z-index: 3;
+  width: 100%; text-align: left;
+  background: var(--wds-primary-normal); color: var(--wds-static-white);
+  border: 0; border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-6) var(--wds-space-10);
+  font-size: var(--wds-label2-size); font-weight: 700;
+  margin-bottom: var(--wds-space-4);
+}
+.logback:hover { filter: brightness(1.08); }
+
 /* ── 마지막 수 · 증강 (탭 위) ──
    진영 스트립 안에 있을 때는 처치 눈금과 한 줄을 다투다 좁아지면 겹쳤다.
    스트립 너비가 창이 아니라 판에 딸려 있어서 창 기준으로는 막을 수도 없었다. */
@@ -1252,12 +1264,20 @@ body.athome { overflow: hidden; }
   border-left: 4px solid var(--wds-primary-normal);
   border-radius: var(--wds-radius-10);
   padding: var(--wds-space-8) var(--wds-space-12);
-  display: flex; gap: var(--wds-space-8); align-items: center; flex-wrap: wrap;
+  display: flex; gap: var(--wds-space-8); align-items: center; flex-wrap: nowrap;
   font-size: var(--wds-label1-size); font-weight: 600;
 }
-.reviewbar span { flex: 1 1 auto; min-width: 0; }
+.revinfo { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 턴 바와 높이를 맞추려면 버튼이 얇아야 한다 — 44px 에서 테두리·안여백을 빼면 26px 이 남는다 */
+.reviewbar .skipbtn, .reviewbar .nav {
+  flex: 0 0 auto; padding: 3px var(--wds-space-8);
+  font-size: var(--wds-label2-size); line-height: 1.5;
+}
 /* 지난 국면을 보는 동안에는 현재 턴 안내를 숨긴다 */
 body.reviewing #turnbar { display: none; }
+/* 두 바는 같은 자리를 나눠 쓴다. 높이가 다르면 그 차이만큼 판이 줄었다 늘었다 하면서
+   기록을 누를 때마다 화면이 출렁인다. 그래서 높이를 같이 묶어 둔다. */
+#turnbar, .reviewbar { min-height: 44px; max-height: 44px; box-sizing: border-box; overflow: hidden; }
 .reviewbar .skipbtn {
   border-color: var(--wds-line-normal-normal); color: var(--wds-label-alternative);
 }
