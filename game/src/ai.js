@@ -635,19 +635,19 @@
   const LEVELS = {
     easy: {
       key: 'easy', label: '초급',
-      maxDepth: 3, budget: 200, noise: 55, blunder: 0.14,
+      maxDepth: 4, budget: 320, noise: 38, blunder: 0.08,
       book: true, smartDraft: false,
-      desc: '3수까지 보지만 판단이 거칠고 가끔 실수합니다',
+      desc: '4수까지 보지만 판단이 거칠고 가끔 실수합니다',
     },
     normal: {
       key: 'normal', label: '중급',
-      maxDepth: 6, budget: 900, noise: 14, blunder: 0.02,
+      maxDepth: 8, budget: 1500, noise: 8, blunder: 0.004,
       book: true, smartDraft: true,
-      desc: '정석 오프닝을 따르고 6수까지 봅니다',
+      desc: '정석 오프닝을 따르고 8수까지 봅니다. 좀처럼 헛수를 두지 않습니다',
     },
     hard: {
       key: 'hard', label: '고급',
-      maxDepth: 20, budget: 2600, noise: 0, blunder: 0,
+      maxDepth: 26, budget: 3600, noise: 0, blunder: 0,
       book: true, smartDraft: true,
       desc: '시간이 허락하는 만큼 깊게 봅니다. 실수하지 않습니다',
     },

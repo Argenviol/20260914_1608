@@ -287,10 +287,17 @@
   });
 
   def('N1c', {
+    async onGain(G, side) { G.flags[side].N1c = 1; },
     async onCapture(G, side, api, ctx) {
+      // 이 증강을 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
+      if (ctx.regrant) return;
       if (ctx.mover.type !== 'n') return;
+      if (!(G.flags[side].N1c > 0)) return;
       const n = wipe(G, adj(ctx.to), side);
-      if (n) api.msg(`N1c — 나이트 주변 기물 ${n}개를 제거했습니다. (아군 포함, 킹 제외)`);
+      // 주변이 비어 있었으면 쓴 것으로 치지 않는다 — 허공에 날리면 억울하다
+      if (!n) { api.msg('N1c — 나이트 주변에 제거할 기물이 없었습니다. (아직 1회 남음)'); return; }
+      G.flags[side].N1c--;
+      api.msg(`N1c — 나이트 주변 기물 ${n}개를 제거했습니다. (아군 포함, 킹 제외 · 남은 횟수 0)`);
     }
   });
 

@@ -150,7 +150,10 @@
     // 조건을 만들어 준 바로 그 수에서 정작 발동하지 않는다.
     if (capCtx && typeof impl(id).onCapture === 'function') {
       const still = Game.G.bd[capCtx.to];
-      if (still && still.id === capCtx.mover.id) await fire2(id, 'onCapture', side, capCtx);
+      // regrant 표시 — '조건을 만든 그 처치' 에는 걸리면 안 되는 증강이 골라낼 수 있게 한다
+      if (still && still.id === capCtx.mover.id) {
+        await fire2(id, 'onCapture', side, Object.assign({}, capCtx, { regrant: true }));
+      }
     }
 
     if (Game.onUpdate) Game.onUpdate('augs');
