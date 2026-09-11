@@ -859,7 +859,17 @@ main {
   flex: 1 1 auto; min-height: 120px;
   overflow: auto; margin-top: var(--wds-space-16);
   display: flex; flex-direction: column; gap: var(--wds-space-16);
+  /* 스크롤바가 카드에 딱 붙으면 카드 테두리와 겹쳐 보인다. 한 칸 띄운다. */
+  padding-right: var(--wds-space-12);
+  scrollbar-width: thin;
+  scrollbar-color: var(--wds-fill-strong) transparent;
 }
+.codexbody::-webkit-scrollbar { width: 8px; }
+.codexbody::-webkit-scrollbar-track { background: transparent; }
+.codexbody::-webkit-scrollbar-thumb {
+  background: var(--wds-fill-strong); border-radius: var(--wds-radius-full);
+}
+.codexbody::-webkit-scrollbar-thumb:hover { background: var(--wds-label-assistive); }
 .codexbody h3 {
   margin: var(--wds-space-8) 0 0; font-size: var(--wds-heading1-size); font-weight: 700;
   position: sticky; top: 0; z-index: 2;
