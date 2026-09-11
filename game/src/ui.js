@@ -33,6 +33,7 @@
   let reviewIdx = -1;                 // 그 국면이 몇 번째인가 (같은 줄을 다시 누르면 나간다)
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
   let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
+  let draftingSide = null;            // 증강을 고르는 중인 진영 ('w'|'b'), 아니면 null
   let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
   let chatUnread = 0;
   let pathTimer = null;
@@ -188,7 +189,10 @@
       const sq = el('div', 'sq ' + (E.lightSquare(i) ? 'light' : 'dark'));
       sq.dataset.i = i;
 
-      const lm = Game().lastMove;
+      /* 마지막에 둔 쪽의 수를 칠한다. 내 수만 들고 있는 Game.lastMove 를 쓰면
+         온라인에서 상대 판을 받아 왔을 때(adopt) 갱신되지 않아 내 옛 수가 계속 노랗게 남았다.
+         판 안의 lastBySide 는 상태 전송에 같이 실려 온다. */
+      const lm = g.lastBySide[E.other(g.turn)] || g.lastBySide[g.turn];
       if (lm && (lm.from === i || lm.to === i)) sq.classList.add('last');
       if (i === sel) sq.classList.add('sel');
       if (dests.includes(i)) sq.classList.add(g.bd[i] ? 'capture' : 'dest');
@@ -668,6 +672,7 @@
         + (gm.clockPaused ? '상대가 증강을 고르는 중입니다' : '상대가 두는 중입니다');
     }
     else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
+    if (draftingSide) msg = sideName(draftingSide) + ' — 증강을 고르는 중입니다';
     const tt = el('span', 'turntext', msg);
     tt.title = msg;                       // 좁아서 말줄임될 때 원문을 볼 수 있게
     t.appendChild(tt);
@@ -716,8 +721,9 @@
     const a = global.AUG_BY_ID[id];
     // 모르는 id (가면 해독 실패 등) 로 화면 전체가 멈추지는 않게 한다
     if (!a) {
+      // 비밀 증강이 아니라 '해독에 실패한' 것이다. 비밀이라고 부르면 없는 정보를 지어내는 셈이다.
       const u = el('div', 'aug hidden');
-      u.innerHTML = '<span class="tag secret">비밀</span> 알 수 없는 증강';
+      u.textContent = '표시할 수 없는 증강 (새로고침하면 돌아옵니다)';
       return u;
     }
     const hidden = a.secret && !g.revealed[id] && dimSecret;
@@ -740,7 +746,8 @@
         n.appendChild(el('span', null, note));
         c.appendChild(n);
       }
-      if (a.terms && a.terms.length) c.appendChild(termTags(a.terms));
+      /* 아래에 #용어 태그를 또 달지 않는다 — 본문에 이미 같은 말이 색칠돼 있고
+         눌러서 뜻도 볼 수 있다. 카드만 두 줄씩 길어졌다. */
     }
     return c;
   }
@@ -1059,7 +1066,12 @@
 
   // 원본 엑셀 증강표의 '한 칸' 을 그대로 펼친다: 같은 기물 · 같은 티어의 선택지 3개, 하나만 고름.
   function draft({ side, tier, piece, offer, round, rounds, byKo }) {
-    return new Promise(res => {
+    return new Promise(async (res) => {
+      /* 처치한 판을 먼저 눈으로 확인하고 나서 고르게 한다.
+         예전에는 잡자마자 덮개가 떠서, 무엇을 어떻게 잡았는지 못 보고 카드부터 봤다. */
+      draftingSide = side;
+      render();
+      await new Promise(r => setTimeout(r, 450));
       SFX().draft();
       const wrap = el('div', 'draft');
 
@@ -1163,7 +1175,11 @@
         if (peekedAt) { deadline += Date.now() - peekedAt; peekedAt = 0; }
       };
 
-      function close() { stopTimer(); closeOverlay(); backBar.remove(); }
+      function close() {
+        stopTimer(); closeOverlay(); backBar.remove();
+        draftingSide = null;
+        renderTurnbar();
+      }
       function finish(id, auto) {
         if (done) return;
         done = true;

@@ -1408,7 +1408,16 @@ body.reviewing #turnbar { display: none; }
 .chatlist {
   display: flex; flex-direction: column; gap: var(--wds-space-6);
   overflow: auto; flex: 1 1 auto; min-height: 0; padding-bottom: var(--wds-space-8);
+  /* 굵은 기본 스크롤바가 말풍선에 붙어 보였다. 도감과 같은 얇은 막대로 맞춘다. */
+  padding-right: var(--wds-space-8);
+  scrollbar-width: thin; scrollbar-color: var(--wds-fill-strong) transparent;
 }
+.chatlist::-webkit-scrollbar { width: 8px; }
+.chatlist::-webkit-scrollbar-track { background: transparent; }
+.chatlist::-webkit-scrollbar-thumb {
+  background: var(--wds-fill-strong); border-radius: var(--wds-radius-full);
+}
+.chatlist::-webkit-scrollbar-thumb:hover { background: var(--wds-label-assistive); }
 .chatrow {
   display: flex; align-items: baseline; gap: var(--wds-space-6);
   max-width: 88%; padding: var(--wds-space-6) var(--wds-space-10);
