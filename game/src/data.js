@@ -761,7 +761,7 @@ window.AUGMENTS = [
   "tier": 3,
   "tag": "횟수제한",
   "secret": false,
-  "text": "1회에 한해, 다음 상대턴 동안 아군 퀸을 포영시킵니다.",
+  "text": "증강을 얻는 즉시, 아군 퀸이 다음 상대턴 동안 포영됩니다.",
   "orig": "",
   "change": "",
   "impl": "auto",

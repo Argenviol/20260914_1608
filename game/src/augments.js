@@ -712,15 +712,14 @@
   });
 
   def('Q3b', {
-    async onGain(G, side) { G.flags[side].Q3b = (G.flags[side].Q3b || 0) + 1; },
-    canActivate(G, side) { return G.flags[side].Q3b > 0 && ownSquares(G, side, 'q').length > 0; },
-    async activate(G, side, api) {
+    /* 예전에는 '충전' 을 주고 다음 내 차례에 눌러 쓰게 했다.
+       그러면 증강을 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
+       다른 포영 증강처럼 증강을 얻는 그 턴에 바로 걸리게 한다. */
+    async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
-      if (q === undefined) return false;
+      if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       E.phaseOut(G, q, E.untilOppTurns(G, 1));
-      G.flags[side].Q3b--;
-      api.msg('Q3b — 아군 퀸이 포영되었습니다.');
-      return true;
+      api.msg('Q3b — 아군 퀸이 다음 상대턴 동안 포영되었습니다.');
     }
   });
 
