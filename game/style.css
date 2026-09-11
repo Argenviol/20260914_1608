@@ -40,11 +40,19 @@
   --dur-perm: var(--wds-accent-foreground-purple);
   --dur-none: var(--wds-label-assistive);
 
+  /* 마지막으로 둔 수 — 어떤 기물이 어디서 어디로 갔는지 판만 보고 알 수 있게.
+     빨강(처치·체크) · 초록(대상 지정) · 주황(증강 발동) · 파랑(선택/이동) · 보라(살펴보기)가
+     이미 뜻을 갖고 있어서, 남은 자리인 노랑을 쓴다. */
+  --last-move: #e9c46a;
+  --last-move-edge: #c9a227;
+
   /* 첫 그림 전 임시값. 실제 크기는 ui.js 의 fitBoard() 가 재서 덮어쓴다 —
      스트립 높이가 내용에 따라 변해서 상수로는 못 맞춘다. */
   --sq: min(82px, calc((100vh - 330px) / 8), calc((100vw - 420px) / 8));
 }
 [data-theme='dark'] {
+  --last-move: #b9922f;
+  --last-move-edge: #e3c15c;
   --bg-grid: color-mix(in srgb, var(--wds-common-100) 4%, transparent);
   --bg-glyph: color-mix(in srgb, var(--wds-common-100) 5%, transparent);
   --board-light: var(--wds-coolNeutral-40);
@@ -260,14 +268,16 @@ main {
   gap: var(--wds-space-8);
   overflow: hidden;
 }
-#turnbar, #oppstrip, #mystrip, #phased, #actions { width: 100%; }
+#turnbar, #oppstrip, #mystrip { width: 100%; }
 .side-col { display: flex; flex-direction: column; min-height: 0; }
 
 /* ── 진영 스트립 ── */
 .strip {
   /* 스트립 너비는 창이 아니라 '판' 너비에 딸려 있다. 그래서 창 기준 미디어쿼리로는
      좁아지는 순간을 못 잡는다 → 어느 폭에서든 겹치지 않게 접히도록 둔다. */
-  display: flex; align-items: center; flex-wrap: wrap;
+  /* 한 줄로 고정한다. 예전에는 줄바꿈을 열어 뒀는데, 잡은 기물이 쌓이거나 이름이 길어지면
+     줄이 늘어 바가 높아졌고 그만큼 판이 줄었다. 폭이 모자라면 줄이는 쪽으로만 간다. */
+  display: flex; align-items: center; flex-wrap: nowrap;
   gap: var(--wds-space-6) var(--wds-space-12);
   background: var(--wds-background-elevated-normal);
   border: 1px solid var(--wds-line-normal-alternative);
@@ -279,7 +289,9 @@ main {
 .stripname { display: flex; align-items: center; gap: var(--wds-space-6); flex: 0 0 auto; }
 .stripname b { font-size: var(--wds-heading2-size); font-weight: 700; }
 .stripwho { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); }
-.stripprog { flex: 1 1 110px; min-width: 0; display: flex; align-items: center; gap: var(--wds-space-8); }
+.stripname { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.stripwho { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stripprog { flex: 1 1 90px; min-width: 0; display: flex; align-items: center; gap: var(--wds-space-8); }
 .stripprog .bar { flex: 1 1 auto; margin: 0; min-width: 40px; }
 .killn { font-weight: 700; color: var(--wds-primary-normal); font-size: var(--wds-label1-size); white-space: nowrap; }
 .killsub { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); white-space: nowrap; }
@@ -460,7 +472,13 @@ body.myturn #boardwrap::after {
 .sq.dark { background: var(--board-dark); }
 
 /* 마지막 수 — 중립 강조 (경고가 아니므로 status 색을 쓰지 않는다) */
-.sq.last { box-shadow: inset 0 0 0 100px var(--wds-fill-strong); }
+/* 마지막 수 — 칸을 노랗게 물들이고 테두리로 한 번 더 잡아 준다.
+   판 색(중립 회색) 위에서 눈에 확 들어오면서, 다른 강조색과 뜻이 겹치지 않는다. */
+.sq.last {
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--last-move) 42%, transparent),
+              inset 0 0 0 2px var(--last-move-edge);
+}
+.sq.last.sel, .sq.last.dest, .sq.last.capture { box-shadow: inset 0 0 0 100px var(--wds-line-primary-strong); }
 /* 선택 · 이동 — primary */
 .sq.sel { box-shadow: inset 0 0 0 100px var(--wds-line-primary-strong); }
 .sq.dest::after {
@@ -534,7 +552,11 @@ body.myturn #boardwrap::after {
 #dragghost.wp { color: var(--piece-white); text-shadow: 0 0 1px var(--piece-white-edge); }
 #dragghost.bp { color: var(--piece-black); text-shadow: 0 0 1px var(--piece-black-edge); }
 
-#phased { display: flex; gap: var(--wds-space-6); flex-wrap: wrap; margin-top: var(--wds-space-10); min-height: 4px; }
+/* 포영 칩과 발동 버튼은 판 칼럼 밖(오른쪽 탭 위)에 둔다.
+   판 아래에 있을 때는 나타났다 사라질 때마다 그만큼 판이 줄었다 늘었다 했다.
+   비어 있으면 자리도 차지하지 않는다. */
+#phased { display: flex; gap: var(--wds-space-6); flex-wrap: wrap; margin-bottom: var(--wds-space-8); }
+#phased:empty, #actions:empty { display: none; }
 .chip {
   background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
   border-radius: var(--wds-radius-full); padding: 2px var(--wds-space-10);
@@ -545,8 +567,9 @@ body.myturn #boardwrap::after {
 .chip b.bp { color: var(--wds-label-alternative); }
 
 #actions {
-  margin-top: var(--wds-space-10); display: flex; flex-direction: column;
-  gap: var(--wds-space-6); overflow-y: auto; min-height: 0;
+  flex: 0 0 auto; margin-bottom: var(--wds-space-8);
+  display: flex; flex-direction: column;
+  gap: var(--wds-space-6); max-height: 34vh; overflow-y: auto;
 }
 .act {
   background: var(--wds-background-status-cautionary);
@@ -1440,7 +1463,7 @@ body.reviewing #turnbar { display: none; }
 /* ── 처치 진행 눈금 ──
    막대 하나에 글자만 있으면 1·3·6·11 이 어디쯤인지 안 보인다. 눈금을 직접 찍는다. */
 .kiltrack {
-  position: relative; flex: 1 1 auto; min-width: 90px;
+  position: relative; flex: 1 1 auto; min-width: 56px;
   height: 6px; background: var(--wds-fill-normal);
   /* 마지막 눈금(11)의 숫자가 트랙 오른쪽 끝을 넘어가므로 그만큼 자리를 비워 둔다 */
   border-radius: var(--wds-radius-full); margin: 9px 10px 11px 0;
@@ -1470,15 +1493,21 @@ body.reviewing #turnbar { display: none; }
 .clockbox { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
 .taken {
   display: flex; align-items: center; gap: 1px;
-  font-size: 15px; line-height: 1; max-width: 190px; flex-wrap: wrap; justify-content: flex-end;
+  /* 비었을 때와 찼을 때 높이가 같아야 한다. 1px만 달라져도 바가 커지고 판이 줄어든다. */
+  height: 18px; font-size: 14px; line-height: 1.3; max-width: 168px;
+  /* 줄을 늘리지 않는다 — 늘어나면 바가 높아지고 판이 줄어든다.
+     대신 우세 숫자를 앞에 둬서, 기물이 넘쳐 잘려도 숫자는 남는다. */
+  flex-wrap: nowrap; overflow: hidden; justify-content: flex-end;
 }
 .taken.none { font-size: var(--wds-caption-size); color: var(--wds-label-assistive); }
 .tkpc.wp { color: var(--piece-white); text-shadow: 0 0 1px var(--piece-white-edge); }
 .tkpc.bp { color: var(--piece-black); text-shadow: 0 0 1px var(--piece-black-edge); }
 .tkadv {
+  flex: 0 0 auto; order: -1;                     /* 잘려도 남도록 맨 앞 */
   font-size: var(--wds-caption-size); font-weight: 800;
-  color: var(--wds-status-positive); margin-left: var(--wds-space-4);
+  color: var(--wds-status-positive); margin-right: var(--wds-space-4);
 }
+.tkpc { flex: 0 0 auto; }
 
 /* ── 살펴보기 — 둘 수는 없고 사거리만 보는 중 ──
    '둘 수 있는 칸'(primary 파랑)과 헷갈리면 안 되므로 다른 색을 쓴다.
