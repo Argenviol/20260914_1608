@@ -656,6 +656,9 @@ main {
   max-width: 520px; width: 100%; max-height: 90vh; overflow: auto;
   box-shadow: var(--wds-shadow-xlarge);
 }
+/* 도감·규칙처럼 안쪽이 스크롤되는 화면.
+   모달까지 같이 스크롤되면 스크롤바가 두 개 겹치고, 내용이 카드 한가운데서 잘린다. */
+.modal.fill { display: flex; flex-direction: column; overflow: hidden; }
 .overlay.wide .modal { max-width: 1060px; }
 .modal h2 { margin: 0 0 var(--wds-space-4); font-size: var(--wds-title2-size); }
 .modal h3 { margin: 0 0 var(--wds-space-12); font-size: var(--wds-heading1-size); font-weight: 700; }
@@ -851,7 +854,10 @@ main {
 .codexsearch:focus { outline: none; border-color: var(--wds-primary-normal); }
 
 .codexbody {
-  max-height: 68vh; overflow: auto; margin-top: var(--wds-space-16);
+  /* 예전에는 68vh 로 못 박아 뒀다. 머리말·닫기 버튼을 더하면 모달 높이(90vh)를 넘겨서
+     모달도 같이 스크롤됐다. 남은 높이를 그대로 쓰게 두면 스크롤바가 하나로 끝난다. */
+  flex: 1 1 auto; min-height: 120px;
+  overflow: auto; margin-top: var(--wds-space-16);
   display: flex; flex-direction: column; gap: var(--wds-space-16);
 }
 .codexbody h3 {
@@ -875,6 +881,14 @@ main {
   gap: var(--wds-space-12); align-items: start;
 }
 .ccol { display: flex; flex-direction: column; gap: var(--wds-space-8); }
+
+/* 티어 칼럼이 부모의 행을 그대로 쓰게 해서 모든 카드 높이를 맞춘다.
+   행 개수는 ui.js 가 gridTemplateRows 로 넣어 준다 (칸마다 3개지만 검색하면 줄어든다).
+   subgrid 를 모르는 브라우저는 위의 flex 배치 그대로 간다 — 어긋나 보일 뿐 못 쓰지는 않는다. */
+@supports (grid-template-rows: subgrid) {
+  .ccols { align-items: stretch; }
+  .ccol { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; }
+}
 .ctier {
   font-size: var(--wds-label2-size); font-weight: 700; letter-spacing: .04em;
   color: var(--wds-label-alternative);
@@ -895,7 +909,10 @@ main {
 .ctext { font-size: var(--wds-label1-size); line-height: 1.6; }
 
 /* 규칙 화면 */
-.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: var(--wds-space-10); }
+/* 4단계짜리 흐름이라 3+1 로 쪼개지면 흐름으로 안 읽힌다. 4 → 2 → 1 로만 접는다. */
+.flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--wds-space-10); }
+@media (max-width: 1000px) { .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 540px)  { .flow { grid-template-columns: 1fr; } }
 .flowstep {
   position: relative; display: grid; grid-template-columns: auto 1fr; gap: var(--wds-space-10);
   align-items: start;
@@ -925,7 +942,7 @@ main {
 .rname { font-weight: 700; margin-bottom: var(--wds-space-4); }
 
 /* 도감·규칙은 본문이 스크롤되므로, 닫기는 본문 밖 오른쪽 아래에 붙인다 */
-.codex { display: flex; flex-direction: column; }
+.codex { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .codex .closebtn { align-self: flex-end; }
 .closebtn {
   margin-top: var(--wds-space-16); background: var(--wds-primary-normal);

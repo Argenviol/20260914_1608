@@ -864,7 +864,8 @@
   /* ═══════════════════ 모달 ═══════════════════ */
   function overlay(node, opts) {
     const ov = el('div', 'overlay' + ((opts && opts.wide) ? ' wide' : ''));
-    const card = el('div', 'modal');
+    // fill: 모달이 아니라 안쪽 본문만 스크롤한다 (스크롤바가 두 개 겹치지 않게)
+    const card = el('div', 'modal' + ((opts && opts.fill) ? ' fill' : ''));
     card.appendChild(node);
     ov.appendChild(card);
     document.body.appendChild(ov);
@@ -1391,6 +1392,11 @@
         sh.appendChild(el('span', 'dim', rows.reduce((n, r) => n + r.list.length, 0) + '종'));
         sec.appendChild(sh);
         const cols = el('div', 'ccols');
+        /* 칸마다 카드 높이가 제각각이면 표가 어긋나 보인다.
+           가장 많은 칸 수만큼 행을 만들어 두고 티어 칼럼이 그 행을 그대로 쓰게 한다(subgrid).
+           행을 1fr 로 두면 모든 카드가 같은 높이가 된다. */
+        const maxN = rows.reduce((n, r) => Math.max(n, r.list.length), 0);
+        cols.style.gridTemplateRows = `auto repeat(${maxN}, 1fr)`;
         for (const r of rows) {
           const col = el('div', 'ccol');
           col.appendChild(el('div', 'ctier', `${r.t}개 처치`));
@@ -1404,7 +1410,7 @@
     }
 
     drawSegs(); fill();
-    const close = overlay(wrap, { wide: true });
+    const close = overlay(wrap, { wide: true, fill: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
@@ -1479,7 +1485,7 @@
     body.appendChild(terms);
 
     wrap.appendChild(body);
-    const close = overlay(wrap, { wide: true });
+    const close = overlay(wrap, { wide: true, fill: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
