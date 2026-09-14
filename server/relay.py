@@ -6,6 +6,7 @@
 (판을 바꾼 쪽이 결과를 보내는 구조라 서버가 판정할 게 없다)
 
 같은 프로세스가 game/ 의 정적 파일도 함께 서빙한다. 주소 하나, CORS 없음.
+대국 통계(/api/stat)와 계정·전적(/api/auth/*, /api/records)도 여기서 받아 수퍼베이스에 적는다.
 
 파이썬만 있으면 돌아간다 — 설치할 것도, 빌드할 것도 없다.
 (예전에는 Node + ws 패키지가 필요했는데, 컴퓨터를 옮길 때마다
@@ -18,16 +19,20 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import posixpath
 import random
+import re
+import secrets
 import socket
 import socketserver
 import struct
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -103,6 +108,146 @@ def stat_allowed(ip):
             for k in [k for k, v in _stat_hits.items() if not v or now - v[-1] > STAT_RATE_SEC]:
                 _stat_hits.pop(k, None)
     return True
+
+
+# ── 계정 · 전적 (수퍼베이스) ──
+# 로그인하면 전적이 기기와 상관없이 이어진다. 비밀번호는 서버에서만 다루고
+# 해시(PBKDF2)로만 저장한다. 세션 토큰도 해시로만 저장한다 — 표가 새어도 그대로 못 쓴다.
+ACCT_RATE_N = 12               # 로그인·가입 시도, IP 당
+ACCT_RATE_SEC = 300            # 이 시간 안에
+SESSION_DAYS = 90
+NAME_RE = re.compile(r"^[0-9A-Za-z가-힣_]{2,16}$")
+PW_MIN, PW_MAX = 6, 72
+PW_ITER = 200_000
+REC_MAX = 100                  # 한 사람이 보관하는 전적 수 (브라우저와 같다)
+API_MAX_BODY = 128 * 1024
+_acct_hits = {}
+
+
+def rate_allowed(store, ip, n, sec):
+    """IP 당 sec 초 안에 n 번까지. 넘으면 False."""
+    now = time.time()
+    with _stat_lock:
+        hits = [t for t in store.get(ip, []) if now - t < sec]
+        if len(hits) >= n:
+            store[ip] = hits
+            return False
+        hits.append(now)
+        store[ip] = hits
+        if len(store) > 5000:
+            for k in [k for k, v in store.items() if not v or now - v[-1] > sec]:
+                store.pop(k, None)
+    return True
+
+
+def supabase_req(method, table, params=None, rows=None, prefer="return=representation"):
+    """수퍼베이스 REST 한 번. 응답 본문이 있으면 JSON 으로 돌려준다."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(rows).encode("utf-8") if rows is not None else None,
+        headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": "Bearer " + SUPABASE_KEY,
+            "Content-Type": "application/json",
+            "Prefer": prefer,
+        },
+        method=method,
+    )
+    with urllib.request.urlopen(req, timeout=8) as r:
+        body = r.read()
+    return json.loads(body.decode("utf-8")) if body else None
+
+
+def pw_hash(pw: str, salt: bytes) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, PW_ITER).hex()
+
+
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def clean_record(r):
+    """브라우저가 보낸 전적 한 줄을 아는 칸만 골라 담는다. (clean_row 는 정수 상한이 작아 시각에 못 쓴다)"""
+    if not isinstance(r, dict):
+        return None
+    at = r.get("at")
+    if not isinstance(at, (int, float)) or at <= 0:
+        return None
+    out = {"at": int(at)}
+    rid = r.get("id")
+    out["id"] = str(rid)[:48] if isinstance(rid, str) and rid else f"r{out['at']}-{r.get('mode', '')}"[:48]
+    for k, cap in (("mode", 10), ("difficulty", 10), ("outcome", 10), ("reason", 200)):
+        v = r.get(k)
+        out[k] = str(v)[:cap] if isinstance(v, str) else None
+    mv = r.get("moves")
+    out["moves"] = max(0, min(100000, int(mv))) if isinstance(mv, (int, float)) else 0
+    for k in ("kills", "augs"):
+        v = r.get(k)
+        out[k] = ({"w": int(v.get("w") or 0), "b": int(v.get("b") or 0)}
+                  if isinstance(v, dict) else {"w": 0, "b": 0})
+    return out
+
+
+def merge_records(server_rows, client_rows):
+    """id 로 합친다. 같은 id 면 서버 것을 둔다. 최신이 앞, REC_MAX 개까지."""
+    by_id = {}
+    for r in list(client_rows or []) + list(server_rows or []):
+        c = clean_record(r)
+        if c:
+            by_id[c["id"]] = c
+    out = sorted(by_id.values(), key=lambda x: -x["at"])
+    return out[:REC_MAX]
+
+
+def acct_by_name(name_lower):
+    rows = supabase_req("GET", "accounts", {"select": "id,name,pw_hash,salt",
+                                            "name_lower": "eq." + name_lower, "limit": "1"})
+    return rows[0] if rows else None
+
+
+def acct_by_token(token):
+    if not token:
+        return None
+    rows = supabase_req("GET", "account_sessions", {
+        "select": "account_id,expires_at,accounts(name)",
+        "token_hash": "eq." + token_hash(token), "limit": "1"})
+    if not rows:
+        return None
+    row = rows[0]
+    exp = row.get("expires_at") or ""
+    # ISO 8601 → epoch. 수퍼베이스는 '+00:00' 로 준다.
+    try:
+        exp_t = time.mktime(time.strptime(exp[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+    except Exception:
+        exp_t = 0
+    if exp_t < time.time():
+        return None
+    acc = row.get("accounts") or {}
+    return {"id": row["account_id"], "name": acc.get("name") or ""}
+
+
+def new_session(account_id):
+    token = secrets.token_urlsafe(32)
+    exp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + SESSION_DAYS * 86400))
+    supabase_req("POST", "account_sessions",
+                 rows=[{"token_hash": token_hash(token), "account_id": account_id, "expires_at": exp}],
+                 prefer="return=minimal")
+    return token
+
+
+def records_get(account_id):
+    rows = supabase_req("GET", "account_records", {"select": "records", "account_id": "eq." + account_id})
+    return (rows[0].get("records") or []) if rows else []
+
+
+def records_put(account_id, records):
+    supabase_req("POST", "account_records", {"on_conflict": "account_id"},
+                 rows=[{"account_id": account_id, "records": records,
+                        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}],
+                 prefer="resolution=merge-duplicates,return=minimal")
 
 
 def supabase_insert(table, rows):
@@ -451,8 +596,8 @@ class Handler(socketserver.StreamRequestHandler):
                 self.respond(200, b"muje-chess ok", "text/plain; charset=utf-8")
                 return
 
-            if method == "POST" and path.split("?")[0] == "/api/stat":
-                self.do_stat(headers)
+            if path.split("?")[0].startswith("/api/"):
+                self.do_api(method, path.split("?")[0], headers)
                 return
 
             if method not in ("GET", "HEAD"):
@@ -462,6 +607,133 @@ class Handler(socketserver.StreamRequestHandler):
             self.do_static(path, head_only=(method == "HEAD"))
         except (OSError, socket.timeout):
             pass
+
+    # ── API ──
+    def json_out(self, code, obj):
+        self.respond(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
+                     "application/json; charset=utf-8", extra={"Cache-Control": "no-store"})
+
+    def read_body(self, headers, cap):
+        try:
+            n = int(headers.get("content-length", "0"))
+        except ValueError:
+            n = 0
+        if n > cap:
+            return None
+        return self.rfile.read(n) if n > 0 else b""
+
+    def do_api(self, method, path, headers):
+        if path == "/api/stat":
+            if method == "POST":
+                self.do_stat(headers)
+            else:
+                self.respond(405, b"method not allowed", "text/plain; charset=utf-8")
+            return
+        try:
+            self.do_account(method, path, headers)
+        except urllib.error.HTTPError as e:
+            # 수퍼베이스가 거절했다. 표가 없거나 키가 틀린 경우가 대부분이다.
+            detail = ""
+            try:
+                detail = e.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                pass
+            print("[account] 수퍼베이스 오류:", e.code, detail, flush=True)
+            self.json_out(502, {"error": "계정 저장소가 요청을 거절했습니다"})
+        except Exception as e:
+            print("[account] 오류:", e, flush=True)
+            self.json_out(502, {"error": "계정 저장소에 연결하지 못했습니다"})
+
+    def do_account(self, method, path, headers):
+        """계정 · 전적. 브라우저는 Authorization: Bearer <토큰> 으로 자기를 밝힌다.
+
+        POST /api/auth/signup  {name, pw, records?}   → {token, name, records}
+        POST /api/auth/login   {name, pw, records?}   → {token, name, records}
+        POST /api/auth/logout                          → 204
+        GET  /api/auth/me                              → {name}
+        GET  /api/records                              → {records}
+        POST /api/records      {records}               → {records}   (합친 결과)
+        DELETE /api/records                            → 204
+        records 는 브라우저에 있던 전적. 로그인할 때 같이 보내면 계정 것과 합쳐 준다."""
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            self.json_out(503, {"error": "서버에 계정 저장소가 아직 연결되지 않았습니다"})
+            return
+        body = self.read_body(headers, API_MAX_BODY)
+        if body is None:
+            self.json_out(413, {"error": "너무 큽니다"})
+            return
+        m = {}
+        if body:
+            try:
+                m = json.loads(body.decode("utf-8"))
+            except Exception:
+                m = {}
+            if not isinstance(m, dict):
+                m = {}
+        auth = headers.get("authorization", "")
+        token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        ip = self.client_address[0]
+
+        if path in ("/api/auth/signup", "/api/auth/login") and method == "POST":
+            if not rate_allowed(_acct_hits, ip, ACCT_RATE_N, ACCT_RATE_SEC):
+                self.json_out(429, {"error": "시도가 너무 잦습니다. 잠시 뒤에 다시 해 주세요"})
+                return
+            name = m.get("name") if isinstance(m.get("name"), str) else ""
+            pw = m.get("pw") if isinstance(m.get("pw"), str) else ""
+            name = name.strip()
+            if not NAME_RE.match(name):
+                self.json_out(400, {"error": "아이디는 2~16자, 한글·영문·숫자·_ 만 됩니다"})
+                return
+            if not (PW_MIN <= len(pw) <= PW_MAX):
+                self.json_out(400, {"error": f"비밀번호는 {PW_MIN}자 이상이어야 합니다"})
+                return
+            existing = acct_by_name(name.lower())
+            if path.endswith("signup"):
+                if existing:
+                    self.json_out(409, {"error": "이미 있는 아이디입니다"})
+                    return
+                salt = secrets.token_bytes(16)
+                rows = supabase_req("POST", "accounts", rows=[{
+                    "name": name, "name_lower": name.lower(),
+                    "pw_hash": pw_hash(pw, salt), "salt": salt.hex(),
+                }])
+                account = {"id": rows[0]["id"], "name": name}
+            else:
+                if not existing or not hmac.compare_digest(
+                        existing.get("pw_hash") or "", pw_hash(pw, bytes.fromhex(existing.get("salt") or ""))):
+                    self.json_out(401, {"error": "아이디나 비밀번호가 맞지 않습니다"})
+                    return
+                account = {"id": existing["id"], "name": existing["name"]}
+            tok = new_session(account["id"])
+            merged = merge_records(records_get(account["id"]), m.get("records") or [])
+            records_put(account["id"], merged)
+            self.json_out(200, {"token": tok, "name": account["name"], "records": merged})
+            return
+
+        # 여기서부터는 로그인이 필요하다
+        account = acct_by_token(token)
+        if path == "/api/auth/logout" and method == "POST":
+            if token:
+                supabase_req("DELETE", "account_sessions", {"token_hash": "eq." + token_hash(token)},
+                             prefer="return=minimal")
+            self.respond(204, b"", "text/plain; charset=utf-8")
+            return
+        if not account:
+            self.json_out(401, {"error": "로그인이 필요합니다"})
+            return
+        if path == "/api/auth/me" and method == "GET":
+            self.json_out(200, {"name": account["name"]})
+        elif path == "/api/records" and method == "GET":
+            self.json_out(200, {"records": records_get(account["id"])})
+        elif path == "/api/records" and method == "POST":
+            merged = merge_records(records_get(account["id"]), m.get("records") or [])
+            records_put(account["id"], merged)
+            self.json_out(200, {"records": merged})
+        elif path == "/api/records" and method == "DELETE":
+            records_put(account["id"], [])
+            self.respond(204, b"", "text/plain; charset=utf-8")
+        else:
+            self.json_out(404, {"error": "없는 주소입니다"})
 
     # ── 대국 통계 ──
     def do_stat(self, headers):
@@ -516,8 +788,10 @@ class Handler(socketserver.StreamRequestHandler):
                      extra={"Cache-Control": cache, "Content-Length": str(len(body))})
 
     def respond(self, code, body: bytes, ctype: str, extra=None):
-        reason = {200: "OK", 204: "No Content", 403: "Forbidden", 404: "Not Found",
-                  405: "Method Not Allowed", 400: "Bad Request"}.get(code, "OK")
+        reason = {200: "OK", 204: "No Content", 400: "Bad Request", 401: "Unauthorized",
+                  403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed", 409: "Conflict",
+                  413: "Payload Too Large", 429: "Too Many Requests", 502: "Bad Gateway",
+                  503: "Service Unavailable"}.get(code, "OK")
         head = [f"HTTP/1.1 {code} {reason}", f"Content-Type: {ctype}"]
         fields = {"Content-Length": str(len(body)), "Connection": "close"}
         if extra:

@@ -156,18 +156,42 @@
     window.addEventListener('resize', closeTermPop);
   }
 
-  /* ───────── 전적 기록 (localStorage) ───────── */
+  /* ───────── 전적 기록 (localStorage + 계정) ─────────
+     기본은 이 브라우저에만 남는다. 로그인해 두면 판이 끝날 때마다 계정과 합쳐서
+     다른 기기에서도 같은 전적이 보인다. 합치는 기준은 판마다 붙인 id 다. */
   const REC_KEY = 'mujeChess.records.v1';
+  function withId(r) {
+    // 예전 기록에는 id 가 없다. 시각+모드로 만들어 두 번 합쳐도 겹치지 않게 한다.
+    if (!r.id) r.id = 'r' + r.at + '-' + (r.mode || '');
+    return r;
+  }
   function loadRecords() {
-    try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]'); }
+    try { return JSON.parse(localStorage.getItem(REC_KEY) || '[]').map(withId); }
     catch (e) { return []; }
   }
+  function storeRecords(all) {
+    try { localStorage.setItem(REC_KEY, JSON.stringify(all.slice(0, 100))); }
+    catch (e) { /* 사생활 보호 모드 등에서 저장이 막혀도 게임은 계속된다 */ }
+  }
   function saveRecord(rec) {
-    try {
-      const all = loadRecords();
-      all.unshift(rec);
-      localStorage.setItem(REC_KEY, JSON.stringify(all.slice(0, 100)));
-    } catch (e) { /* 사생활 보호 모드 등에서 저장이 막혀도 게임은 계속된다 */ }
+    // '전적 저장 끔' 이면 아무 데도 안 남긴다
+    if (global.Stats && !global.Stats.enabled()) return;
+    rec.id = 'r' + rec.at + '-' + Math.random().toString(36).slice(2, 8);
+    const all = loadRecords();
+    all.unshift(rec);
+    storeRecords(all);
+    syncRecords();
+  }
+  // 계정과 합친다. 서버가 안 되면 조용히 넘긴다 — 브라우저 기록은 이미 남아 있다.
+  let syncing = false;
+  function syncRecords() {
+    const A = global.Account;
+    if (!A || !A.loggedIn() || syncing) return;
+    syncing = true;
+    A.syncRecords(loadRecords())
+      .then(list => { storeRecords(list); renderHomeRecords(); })
+      .catch(() => { })
+      .then(() => { syncing = false; });
   }
 
   /* ═══════════════════ 체스판 ═══════════════════ */
@@ -1370,8 +1394,13 @@
   function renderHomeRecords() {
     const box = $('#h-records');
     if (!box) return;
+    renderAccountRow();
     const all = loadRecords();
     box.innerHTML = '';
+    const A = global.Account;
+    if (A && A.available() && !A.loggedIn()) {
+      box.appendChild(el('div', 'accthint', '로그인해 두면 다른 기기에서도 전적이 이어집니다.'));
+    }
     if (!all.length) {
       box.appendChild(el('div', 'recempty', '아직 기록이 없습니다. 한 판 두고 오면 여기에 쌓입니다.'));
       return;
@@ -1418,11 +1447,84 @@
 
     const clear = el('button', 'nav ghost small', '기록 지우기');
     clear.onclick = () => {
-      if (!window.confirm('저장된 전적을 모두 지울까요?')) return;
+      const A = global.Account;
+      const onAcct = A && A.loggedIn();
+      if (!window.confirm(onAcct ? '저장된 전적을 모두 지울까요? 계정에 있는 것도 같이 지워집니다.'
+        : '저장된 전적을 모두 지울까요?')) return;
       try { localStorage.removeItem(REC_KEY); } catch (e) { }
+      if (onAcct) A.clearRecords().catch(() => { });
       renderHomeRecords();
     };
     box.appendChild(clear);
+  }
+
+  /* ───────── 계정 (기록 카드 머리) ───────── */
+  function renderAccountRow() {
+    const row = $('#h-account');
+    const A = global.Account;
+    if (!row || !A || !A.available()) return;
+    row.innerHTML = '';
+    if (A.loggedIn()) {
+      const nm = el('span', 'acctname', A.name());
+      nm.title = A.name();
+      row.appendChild(nm);
+      const out = el('button', 'nav ghost small', '로그아웃');
+      out.onclick = async () => {
+        SFX().pick();
+        await A.logout();
+        renderHomeRecords();
+      };
+      row.appendChild(out);
+    } else {
+      const btn = el('button', 'nav ghost small', '로그인');
+      btn.onclick = () => { SFX().pick(); openAccountModal(); };
+      row.appendChild(btn);
+    }
+  }
+
+  function openAccountModal() {
+    const A = global.Account;
+    const wrap = el('div');
+    wrap.appendChild(el('h3', null, '로그인 \u00B7 가입'));
+    wrap.appendChild(el('div', 'sub', '아이디와 비밀번호만 있으면 됩니다. 로그인하면 이 브라우저의 전적이 계정으로 합쳐지고, 다른 기기에서도 이어집니다.'));
+    const form = el('form', 'acctform');
+    const id = el('input'); id.placeholder = '아이디 (2~16자, 한글·영문·숫자·_)'; id.maxLength = 16; id.autocomplete = 'username';
+    const pw = el('input'); pw.type = 'password'; pw.placeholder = '비밀번호 (6자 이상)'; pw.maxLength = 72; pw.autocomplete = 'current-password';
+    const err = el('div', 'accterr', '');
+    const btns = el('div', 'acctbtns');
+    const login = el('button', 'nav', '로그인'); login.type = 'submit';
+    const signup = el('button', 'nav alt', '가입하고 로그인'); signup.type = 'button';
+    const cancel = el('button', 'nav ghost', '닫기'); cancel.type = 'button';
+    btns.append(login, signup, cancel);
+    form.append(id, pw, err, btns);
+    wrap.appendChild(form);
+    const close = overlay(wrap);
+    cancel.onclick = () => close();
+    setTimeout(() => id.focus(), 0);
+
+    let busy = false;
+    async function go(fn) {
+      if (busy) return;
+      const n = id.value.trim(), p = pw.value;
+      if (!n || !p) { err.textContent = '아이디와 비밀번호를 넣어 주세요.'; return; }
+      busy = true; err.textContent = '';
+      login.disabled = signup.disabled = true;
+      try {
+        const merged = await fn(n, p, loadRecords());
+        storeRecords(merged);
+        SFX().pick();
+        close();
+        renderHomeRecords();
+      } catch (e) {
+        err.textContent = e.status === 503
+          ? '서버에 계정 저장소가 아직 연결되지 않았습니다. 지금은 이 브라우저에만 기록됩니다.'
+          : (e.message || '실패했습니다');
+      } finally {
+        busy = false; login.disabled = signup.disabled = false;
+      }
+    }
+    form.onsubmit = (ev) => { ev.preventDefault(); go(A.login); };
+    signup.onclick = () => go(A.signup);
   }
 
   /* ═══════════════════ 도감 · 규칙 ═══════════════════ */
@@ -2074,16 +2176,17 @@
     $('#theme').onclick = toggleTheme;
     $('#h-theme').onclick = toggleTheme;
 
-    /* 익명 통계 — 기본은 켬. 무엇이 나가는지 알 수 있게 메인에 스위치를 둔다.
+    /* 전적 저장 — 기본은 켬. 끄면 판이 끝나도 기록에 안 남고(브라우저·계정 모두), 익명 통계도 안 나간다.
+       '통계' 라는 이름은 화면에서 달라지는 게 없어 무슨 스위치인지 알 수 없었다. 눈에 보이는 전적으로 이름을 붙인다.
        사람에 대한 건 기기마다 만든 임의의 id 말고 아무것도 안 보낸다. */
     const sb = $('#h-stats');
     if (sb && global.Stats) {
       const syncStats = () => {
         const on = global.Stats.enabled();
-        sb.textContent = (on ? '📊' : '🚫') + ' 통계 ' + (on ? '켬' : '끔');
+        sb.textContent = (on ? '📝' : '🚫') + ' 전적 저장 ' + (on ? '켬' : '끔');
         sb.title = on
-          ? '익명 대국 통계를 보내는 중 — 승패·수·고른 증강만. 누르면 끕니다.'
-          : '통계를 안 보내는 중. 누르면 켭니다.';
+          ? '판이 끝나면 전적을 남깁니다 (로그인 중이면 계정에도). 익명 통계도 함께 갑니다. 누르면 끕니다.'
+          : '전적을 남기지 않는 중 — 기록에도, 계정에도, 통계에도 안 갑니다. 누르면 켭니다.';
       };
       sb.onclick = () => { global.Stats.setEnabled(!global.Stats.enabled()); syncStats(); SFX().pick(); };
       syncStats();
@@ -2095,6 +2198,9 @@
       b.onclick = () => { setTab(b.dataset.tab); SFX().pick(); };
     });
     renderHomeRecords();
+    if (global.Account && global.Account.available()) {
+      global.Account.restore().then(ok => { renderHomeRecords(); if (ok) syncRecords(); });
+    }
 
     // 화면 뒤에 유효한 판을 하나 만들어 두고 메인을 띄운다 (AI 는 아직 돌지 않음)
     gm.start({ mode: 'pvp', timeControl: null });
