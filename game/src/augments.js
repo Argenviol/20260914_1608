@@ -1,5 +1,5 @@
 /* ============================================================
-   무제체스 - 증강 구현 (73종)
+   무제체스 - 증강 구현 (72종)
 
    훅
      onGain(G, side, api)          증강 획득 즉시
@@ -329,8 +329,9 @@
 
   def('N3b', {
     async onGain(G, side, api) {
-      E.addEff(G, { kind: 'knightOnly', owner: side, until: E.untilMyTurns(G, 2) });
-      api.msg('N3b — 2턴 동안 서로 나이트만 움직일 수 있습니다. (나이트가 없거나 체크 상태면 예외)');
+      // 양쪽이 한 턴씩. 예전에는 '내 2턴' 기준이라 상대 2턴 + 내 1턴으로 양쪽이 안 맞았다.
+      E.addEff(G, { kind: 'knightOnly', owner: side, until: E.untilEachTurns(G, 1) });
+      api.msg('N3b — 양쪽이 한 턴씩 나이트만 움직일 수 있습니다. (나이트가 없거나 체크 상태면 예외)');
     }
   });
 

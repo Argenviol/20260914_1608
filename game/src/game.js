@@ -501,6 +501,12 @@
 
     await fire('onTurnStart', side, null);
 
+    /* 턴 시작에 일어난 처치(N6b 처럼)도 바로 증강으로 이어져야 한다.
+       예전에는 드래프트가 doMove 안에서만 돌아서, 이런 처치는 '다음에 수를 둘 때'
+       뒤늦게 창이 떴다. 잡은 것과 증강이 한 박자 어긋나 보이던 원인이다. */
+    await runDrafts(side, null, null);
+    if (G.result) return;
+
     // 체크 / 체크메이트
     const st = E.statusOf(G, side);
     if (st === 'checkmate') { G.result = { winner: opp(side), reason: '체크메이트' }; return; }

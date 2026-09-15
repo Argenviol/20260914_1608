@@ -1181,7 +1181,24 @@ body.athome { overflow: hidden; }
   display: flex; flex-direction: column; max-height: 46vh; min-height: 0;
 }
 .recordcard #h-records { min-height: 0; }
-.rechead { font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-8); }
+.rechead {
+  font-size: var(--wds-heading1-size); font-weight: 700; margin-bottom: var(--wds-space-8);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--wds-space-8);
+}
+/* ── 계정 (기록 카드 머리) ── */
+#h-account { display: flex; align-items: center; gap: var(--wds-space-6); font-size: var(--wds-label2-size); font-weight: 500; min-width: 0; }
+#h-account .acctname { font-weight: 700; color: var(--wds-primary-normal); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
+.accthint { color: var(--wds-label-alternative); font-size: var(--wds-caption-size); line-height: 1.5; margin-bottom: var(--wds-space-4); }
+.acctform { display: flex; flex-direction: column; gap: var(--wds-space-8); margin-top: var(--wds-space-12); }
+.acctform input {
+  background: var(--wds-background-normal-normal); color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal); border-radius: var(--wds-radius-10);
+  padding: var(--wds-space-12) var(--wds-space-12); font: inherit; width: 100%;
+}
+.acctform input:focus { outline: none; border-color: var(--wds-primary-normal); }
+.acctbtns { display: flex; gap: var(--wds-space-8); margin-top: var(--wds-space-4); }
+.acctbtns .nav { flex: 1 1 0; }
+.accterr { color: var(--wds-status-negative); font-size: var(--wds-label2-size); min-height: 1.4em; }
 /* 좁은 세로 칸이라 항목은 두 줄짜리 원래 모양 그대로. 넘치면 목록만 스크롤한다. */
 #h-records { display: flex; flex-direction: column; gap: var(--wds-space-8); min-height: 0; }
 #h-records .reclist {
@@ -1408,7 +1425,16 @@ body.reviewing #turnbar { display: none; }
 .chatlist {
   display: flex; flex-direction: column; gap: var(--wds-space-6);
   overflow: auto; flex: 1 1 auto; min-height: 0; padding-bottom: var(--wds-space-8);
+  /* 굵은 기본 스크롤바가 말풍선에 붙어 보였다. 도감과 같은 얇은 막대로 맞춘다. */
+  padding-right: var(--wds-space-8);
+  scrollbar-width: thin; scrollbar-color: var(--wds-fill-strong) transparent;
 }
+.chatlist::-webkit-scrollbar { width: 8px; }
+.chatlist::-webkit-scrollbar-track { background: transparent; }
+.chatlist::-webkit-scrollbar-thumb {
+  background: var(--wds-fill-strong); border-radius: var(--wds-radius-full);
+}
+.chatlist::-webkit-scrollbar-thumb:hover { background: var(--wds-label-assistive); }
 .chatrow {
   display: flex; align-items: baseline; gap: var(--wds-space-6);
   max-width: 88%; padding: var(--wds-space-6) var(--wds-space-10);

@@ -102,6 +102,8 @@
      until 은 "이 ply 가 되는 순간 사라진다" 를 뜻한다. */
   function untilMyTurns(G, n) { return G.ply + 2 * n; }        // 내 n번째 다음 턴이 시작될 때
   function untilOppTurns(G, n) { return G.ply + 2 * n; }       // 상대의 다음 n턴을 모두 덮는다
+  // 양쪽이 n턴씩. 상대 n턴 + 내 n턴을 덮고, 그 다음 상대 차례가 오기 직전에 풀린다.
+  function untilEachTurns(G, n) { return G.ply + 2 * n + 1; }
 
   function addEff(G, e) {
     e.uid = ++UID;
@@ -698,7 +700,7 @@
     FILES, VALUE, KO, KO2T, START,
     rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
-    untilMyTurns, untilOppTurns, addEff, effs, hasEff, dropEff, expireEffects,
+    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, dropEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,
     removePiece, mutate, phaseOut, returnPhased, swapPieces, addKill, nearestEmpty,
     DIR_R, DIR_B, DIR_Q, N_JUMP, N_JUMP2, longDiagOf,
