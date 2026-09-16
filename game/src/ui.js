@@ -34,10 +34,15 @@
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
   let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
   let draftingSide = null;            // 증강을 고르는 중인 진영 ('w'|'b'), 아니면 null
+  let premove = null;                 // {from, to, type} — 상대 차례에 미리 예약해 둔 내 수
+  let pmFrom = -1, pmDests = [];      // 예약할 기물을 고르는 중 (출발 칸 · 갈 수 있는 칸)
+  let pmTimer = null;
+  let oppDraft = null;                // {left, limit, at, piece, tier} — 상대가 증강을 고르는 중 (온라인)
   let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
   let chatUnread = 0;
   let pathTimer = null;
   let modalDepth = 0;
+  let pauseDepth = 0;                 // 시계를 멈추는 모달의 수 (도감·규칙·계정 창은 세지 않는다)
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
   let lowTimeWarned = { w: false, b: false };
 
@@ -151,6 +156,7 @@
     document.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape') return;
       if (termPop) { closeTermPop(); return; }
+      if (premove || pmFrom >= 0) { cancelPremove(); return; }
       if (review) exitReview();
     });
     window.addEventListener('resize', closeTermPop);
@@ -207,6 +213,8 @@
     if (flip) order.reverse();
 
     const human = Game().isHuman(g.turn) && !g.result && !Game().busy;
+    const pmOk = canPremove();
+    const pmSide = pmOk ? premoveSide() : null;
 
     for (const i of order) {
       const [r, c] = E.rc(i);
@@ -227,6 +235,12 @@
       }
       if (pending && pending.squares.includes(i)) sq.classList.add('pick');
       if (flashSquares.has(i)) sq.classList.add('flash');
+      // 수 예약 — 고르는 중인 기물과 갈 곳, 그리고 이미 예약한 수
+      if (pmOk) {
+        if (i === pmFrom) sq.classList.add('pmsel');
+        else if (pmDests.includes(i)) sq.classList.add(g.bd[i] ? 'pmcap' : 'pmdest');
+        if (premove && (i === premove.from || i === premove.to)) sq.classList.add('premove');
+      }
 
       // 도약 경로 — 지나간 칸에 순번을 찍어 어떻게 간 것인지 보여 준다
       if (pathHint) {
@@ -243,7 +257,7 @@
       if (p) {
         const pe = el('div', 'pc ' + (p.color === 'w' ? 'wp' : 'bp'), GLYPH[p.type]);
         if (p.type === 'k' && E.inCheck(g, p.color) && !g.result) sq.classList.add('incheck');
-        if (human && p.color === g.turn) pe.classList.add('grab');
+        if ((human && p.color === g.turn) || (pmOk && p.color === pmSide)) pe.classList.add('grab');
         if (drag && drag.from === i) pe.classList.add('dragging');
         const ur = Game().untargetableRemain(p.id);
         if (ur !== null) {
@@ -411,6 +425,63 @@
       && Game().myTurn() && !pending && !review;
   }
 
+  /* ───────── 수 예약 (상대 차례에 미리 두기) ─────────
+     상대가 두는 동안 내 기물을 집어 갈 곳에 놓아 두면, 내 차례가 오는 순간 그 수를 둔다.
+     그때 판에서 합법이 아니면(기물이 잡혔거나 길이 막혔거나) 조용히 취소한다.
+     AI 대전과 온라인에서만 뜻이 있다 — 한 화면 2인 대전은 항상 둘 수 있는 쪽이 있다. */
+  function premoveSide() {
+    const gm = Game();
+    return gm.mode === 'online' ? gm.mySide : gm.mode === 'ai' ? E.other(gm.aiSide) : null;
+  }
+  function canPremove() {
+    const g = G(), gm = Game();
+    if (!g || g.result || review || pending) return false;
+    if (gm.mode === 'online') return g.turn !== gm.mySide;
+    if (gm.mode === 'ai') return g.turn === gm.aiSide || gm.busy;
+    return false;
+  }
+  // 내 차례라 치고 그 기물이 갈 수 있는 곳. 상대가 둔 뒤에 다시 검사하므로 지금은 대략이면 된다.
+  function premoveDests(i) {
+    const pk = peekMoves(i);
+    return pk ? pk.dests : [];
+  }
+  function setPremove(from, to) {
+    const p = G().bd[from];
+    premove = { from, to, type: p ? p.type : 'p' };
+    pmFrom = -1; pmDests = [];
+    SFX().pick();
+    toast(`수 예약 — ${E.KO[premove.type]} ${E.sqName(from)}→${E.sqName(to)}. 내 차례가 오면 바로 둡니다 (판을 우클릭하면 취소)`);
+    render();
+  }
+  function cancelPremove(silent) {
+    const had = premove || pmFrom >= 0;
+    premove = null; pmFrom = -1; pmDests = [];
+    if (had && !silent) { toast('예약한 수를 취소했습니다'); SFX().deny(); }
+    if (had) render();
+  }
+  // 내 차례가 열리면 예약한 수를 둔다. 상대의 수를 잠깐 보여 준 뒤에.
+  function schedulePremove() {
+    clearTimeout(pmTimer);
+    if (!premove) return;
+    pmTimer = setTimeout(runPremove, 180);
+  }
+  async function runPremove() {
+    if (!premove || !canControl()) return;
+    const g = G(), gm = Game();
+    if (gm.mode === 'online' && g.begunPly !== g.ply) return;   // 턴 시작 처리가 아직 안 끝났다
+    const pm = premove; premove = null;
+    const p = g.bd[pm.from];
+    const ms = p ? gm.legalFor(pm.from).filter(m => m.to === pm.to) : [];
+    if (!ms.length) {
+      toast(`예약한 수(${E.sqName(pm.from)}→${E.sqName(pm.to)})를 지금 판에서는 둘 수 없어 취소했습니다`);
+      SFX().deny(); render();
+      return;
+    }
+    const m = ms.find(x => x.promo === 'q') || ms[0];   // 승격이면 퀸으로
+    sel = -1; dests = []; setPeek(null);
+    await gm.play(m);
+  }
+
   function selectSquare(i) {
     const g = G();
     const p = g.bd[i];
@@ -458,6 +529,29 @@
 
     // 둘 수 없는 상황(상대 차례·관전·끝난 판)에서는 '살펴보기' 로만 쓴다
     if (!canControl()) {
+      if (canPremove()) {
+        const me = premoveSide();
+        // 예약할 기물을 고른 뒤 갈 곳을 누름 → 예약
+        if (pmFrom >= 0 && pmDests.includes(i)) { setPremove(pmFrom, i); return; }
+        if (p && p.color === me) {
+          // 내 기물 → 예약할 출발점. 끌어서 놓을 수도 있다.
+          premove = null; peek = null;
+          pmFrom = i; pmDests = premoveDests(i);
+          if (!pmDests.length) { toast('지금 판에서는 이 기물이 갈 곳이 없습니다'); SFX().deny(); }
+          else SFX().lift();
+          drag = { from: i, moved: false, startX: ev.clientX, startY: ev.clientY, type: p.type, color: p.color, premove: true };
+          renderBoard();
+          ev.preventDefault();
+          return;
+        }
+        // 빈칸·상대 기물 → 예약을 접고, 상대 기물이면 사거리만 본다
+        const had = premove || pmFrom >= 0;
+        premove = null; pmFrom = -1; pmDests = [];
+        if (had && !p) { toast('예약한 수를 취소했습니다'); }
+        setPeek(p ? peekMoves(i) : null);
+        if (had) render();
+        return;
+      }
       setPeek(p ? peekMoves(i) : null);
       return;
     }
@@ -494,13 +588,14 @@
     }
     const ghost = $('#dragghost');
     ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px) translate(-50%, -50%)`;
-    // 호버 강조
+    // 호버 강조 (예약 드래그면 예약 후보 칸 기준)
+    const ds = drag.premove ? pmDests : dests;
     const over = squareAt(ev.clientX, ev.clientY);
-    const want = (over >= 0 && dests.includes(over)) ? leapHint(drag.from, over) : null;
+    const want = (over >= 0 && ds.includes(over)) ? leapHint(drag.from, over) : null;
     if (want) setPathHint(want);
     else if (pathHint && !pathHint.pinned) setPathHint(null);
     document.querySelectorAll('#board .sq.over').forEach(n => n.classList.remove('over'));
-    if (over >= 0 && dests.includes(over)) {
+    if (over >= 0 && ds.includes(over)) {
       const n = document.querySelector(`#board .sq[data-i="${over}"]`);
       if (n) n.classList.add('over');
     }
@@ -523,6 +618,11 @@
     document.querySelectorAll('#board .sq.over').forEach(n => n.classList.remove('over'));
     if (!d.moved) { renderBoard(); return; }            // 클릭이었음 → 선택 유지
     const to = squareAt(ev.clientX, ev.clientY);
+    if (d.premove) {
+      if (to >= 0 && pmDests.includes(to)) setPremove(d.from, to);
+      else renderBoard();
+      return;
+    }
     if (to >= 0 && dests.includes(to)) { await tryMove(d.from, to); }
     else { renderBoard(); }
   }
@@ -692,14 +792,29 @@
     if (who.kind === 'ai') msg = sideName(g.turn) + ' 차례 — AI가 생각하고 있습니다';
     else if (who.kind === 'me') msg = sideName(g.turn) + ' 차례 — 당신이 둘 차례입니다';
     else if (gm.mode === 'online') {
+      /* '증강을 고르는 중' 은 상대가 실제로 드래프트 신호를 보냈을 때만.
+         예전에는 시계가 멈추기만 하면 그렇게 적어서, 상대가 도감을 열어도 그 말이 떴다. */
       msg = sideName(g.turn) + ' 차례 — '
-        + (gm.clockPaused ? '상대가 증강을 고르는 중입니다' : '상대가 두는 중입니다');
+        + (oppDraft ? '상대가 증강을 고르는 중입니다'
+          : gm.clockPaused ? '상대가 대상을 지정하는 중입니다' : '상대가 두는 중입니다');
     }
     else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
     if (draftingSide) msg = sideName(draftingSide) + ' — 증강을 고르는 중입니다';
     const tt = el('span', 'turntext', msg);
     tt.title = msg;                       // 좁아서 말줄임될 때 원문을 볼 수 있게
     t.appendChild(tt);
+
+    // 예약한 수 — 누르면 취소
+    if (premove && canPremove()) {
+      const b = el('button', 'pmchip',
+        `예약 ${E.KO[premove.type]} ${E.sqName(premove.from)}→${E.sqName(premove.to)} ✕`);
+      b.title = '내 차례가 오면 이 수를 둡니다. 누르면 취소합니다.';
+      b.onclick = () => cancelPremove();
+      t.appendChild(b);
+    } else if (canPremove() && !premove && pmFrom < 0) {
+      const h = el('span', 'pmhint', '내 기물을 끌어 두면 수를 예약할 수 있습니다');
+      t.appendChild(h);
+    }
 
     if (E.inCheck(g, g.turn)) t.appendChild(el('span', 'checkchip', '체크!'));
 
@@ -716,7 +831,8 @@
   function renderActions() {
     const g = G(), box = $('#actions');
     box.innerHTML = '';
-    if (g.result || !Game().isHuman(g.turn)) return;
+    // 온라인에서는 내 차례에 내 것만. 상대 차례에 상대 증강 버튼이 떠서 눌러도 안 되던 것.
+    if (g.result || !Game().isHuman(g.turn) || !Game().myTurn()) return;
     const ids = Game().activatable(g.turn);
     if (!ids.length) return;
     for (const id of ids) {
@@ -768,6 +884,22 @@
         const n = el('div', 'augnote');
         n.appendChild(el('span', 'augnotelabel', '교환'));
         n.appendChild(el('span', null, note));
+        c.appendChild(n);
+      }
+      /* B3a·B3b — '점수 합이 홀수/짝수면' 은 지금 합이 얼마인지 알아야 대비할 수 있다.
+         판정 전에는 지금 합과 조건 충족 여부를, 판정 뒤에는 결과를 적는다. */
+      if ((id === 'B3a' || id === 'B3b') && side && global.parityStatus) {
+        const st = global.parityStatus(g, side, id);
+        const n = el('div', 'augnote');
+        if (st.done) {
+          n.appendChild(el('span', 'augnotelabel', '판정 끝'));
+          n.appendChild(el('span', null, st.done === 'fired' ? '폰을 소환했습니다' : '조건이 맞지 않아 소환하지 않았습니다'));
+          c.classList.add('spent');
+        } else {
+          n.appendChild(el('span', 'augnotelabel', '지금'));
+          n.appendChild(el('span', null,
+            `아군 점수 합 ${st.sum} (${st.odd ? '홀수' : '짝수'}) → ${st.ok ? '조건 충족 ✓' : '조건 불일치 ✕'} · 다음 내 차례에 판정`));
+        }
         c.appendChild(n);
       }
       /* 아래에 #용어 태그를 또 달지 않는다 — 본문에 이미 같은 말이 색칠돼 있고
@@ -983,7 +1115,7 @@
 
   function render() {
     renderBoard(); renderStrips(); renderLastMoves();
-    renderTurnbar(); renderActions(); renderTabPanel();
+    renderTurnbar(); renderActions(); renderTabPanel(); renderOppDraft();
     // 내가 둘 수 있으면 판 둘레가 은은하게 뛴다 — 판만 보고 있어도 차례가 보이게
     document.body.classList.toggle('myturn', canControl());
     fitBoard();
@@ -1022,10 +1154,19 @@
     card.appendChild(node);
     ov.appendChild(card);
     document.body.appendChild(ov);
-    modalDepth++; Game().pauseClock();
+    /* keepClock: 도감·규칙·계정 창처럼 게임 진행과 무관한 창. 시계를 멈추지 않는다.
+       예전에는 모든 창이 시계를 멈춰서, 상대 차례에 도감을 열어 두면 상대 시간이
+       공짜로 서고 내 화면에는 '증강을 고르는 중' 이라고 떴다. */
+    const pauses = !(opts && opts.keepClock);
+    modalDepth++;
+    if (pauses) { pauseDepth++; Game().pauseClock(); }
+    let closed = false;
     const close = () => {
+      if (closed) return;
+      closed = true;
       ov.remove(); modalDepth--;
-      if (modalDepth <= 0) { modalDepth = 0; Game().resumeClock(); }
+      if (modalDepth < 0) modalDepth = 0;
+      if (pauses) { pauseDepth--; if (pauseDepth <= 0) { pauseDepth = 0; Game().resumeClock(); } }
     };
     close.el = ov;                 // 호출부에서 오버레이 자체가 필요할 때가 있다
     return close;
@@ -1073,10 +1214,14 @@
   function pickSquare(prompt, squares, optional) {
     return new Promise(res => {
       if (!squares || !squares.length) { res(null); return; }
-      Game().pauseClock();
+      pauseDepth++; Game().pauseClock();
       const bar = el('div', 'pickbar');
       bar.appendChild(el('span', null, prompt));
-      const done = (v) => { bar.remove(); Game().resumeClock(); res(v); };
+      const done = (v) => {
+        bar.remove();
+        pauseDepth--; if (pauseDepth <= 0) { pauseDepth = 0; Game().resumeClock(); }
+        res(v);
+      };
       if (optional) {
         const skip = el('button', 'skipbtn', '건너뛰기');
         skip.onclick = () => { pending = null; render(); done(null); };
@@ -1092,8 +1237,10 @@
   function draft({ side, tier, piece, offer, round, rounds, byKo }) {
     return new Promise(async (res) => {
       /* 처치한 판을 먼저 눈으로 확인하고 나서 고르게 한다.
-         예전에는 잡자마자 덮개가 떠서, 무엇을 어떻게 잡았는지 못 보고 카드부터 봤다. */
+         예전에는 잡자마자 덮개가 떠서, 무엇을 어떻게 잡았는지 못 보고 카드부터 봤다.
+         시계는 창이 뜨기 전 이 순간부터 멈춘다 — 판을 보여 주는 0.45초도 고르는 시간이다. */
       draftingSide = side;
+      pauseDepth++; Game().pauseClock();
       render();
       await new Promise(r => setTimeout(r, 450));
       SFX().draft();
@@ -1168,12 +1315,20 @@
         finish(r.aug.id, true);
       }
 
+      /* 온라인이면 상대 화면에도 '고르는 중 · 남은 시간' 을 띄운다.
+         판 보기로 멈춰 두면 deadline 이 밀리므로, 남은 시간을 그대로 보내면 된다. */
+      const online = Game().mode === 'online';
+      const tellOpp = (left) => { if (online) global.Net.note('draft', null, { left, limit: LIMIT, piece, tier }); };
+      tellOpp(LIMIT);
+      let lastTold = LIMIT;
+
       tick = setInterval(() => {
-        const left = Math.max(0, deadline - Date.now());
+        const left = peekedAt ? (deadline + (Date.now() - peekedAt) - Date.now()) : Math.max(0, deadline - Date.now());
         const sec = Math.ceil(left / 1000);
         tnum.textContent = String(sec);
         tfill.style.width = (left / LIMIT * 100) + '%';
         timerWrap.classList.toggle('urgent', left <= 10000);
+        if (Math.abs(lastTold - left) >= 500) { lastTold = left; tellOpp(left); }
         if (left <= 0) { stopTimer(); onTimeUp(); }
       }, 100);
 
@@ -1202,6 +1357,8 @@
       function close() {
         stopTimer(); closeOverlay(); backBar.remove();
         draftingSide = null;
+        pauseDepth--; if (pauseDepth <= 0) { pauseDepth = 0; Game().resumeClock(); }
+        if (online) global.Net.note('draftEnd');
         renderTurnbar();
       }
       function finish(id, auto) {
@@ -1275,8 +1432,10 @@
   function announce(side, id, kind) {
     const a = global.AUG_BY_ID[id];
     const gm = Game();
-    const isOpp = gm.mode === 'ai' ? side === gm.aiSide : false;
-    const who = gm.mode === 'ai' ? (isOpp ? 'AI' : '내') : `${sideName(side)} 플레이어의`;
+    const isOpp = gm.mode === 'ai' ? side === gm.aiSide : gm.mode === 'online' ? side !== gm.mySide : false;
+    const who = gm.mode === 'ai' ? (isOpp ? 'AI' : '내')
+      : gm.mode === 'online' ? (isOpp ? '상대의' : '내')
+        : `${sideName(side)} 플레이어의`;
 
     if (kind === 'secret') {
       centerCard({
@@ -1289,6 +1448,8 @@
       return;
     }
     if (kind === 'reveal') {
+      // 내 비밀 증강이 발동한 건 발동 배너·판 효과·(B3a 같은) 판정 카드로 이미 보인다. 상대에게만 새 소식이다.
+      if ((gm.mode === 'online' || gm.mode === 'ai') && !isOpp) { SFX().augment(); return; }
       centerCard({
         title: `${who} 비밀 증강이 공개되었습니다`,
         sub: `${a.piece} ${a.id}`, body: a.text, terms: a.terms,
@@ -1304,6 +1465,61 @@
       cls: isOpp ? 'enemy' : 'mine', ms: 2600,
     });
     if (isOpp) SFX().enemyAugment(); else SFX().augment();
+  }
+
+  /* 상대 화면에서 돌아간 증강이 내 판을 바꿨을 때. 예전에는 기물이 소리 없이 사라졌다.
+     바뀐 칸을 빛내고, 상대 화면에만 떴던 발동 줄을 배너로 보여 준다. */
+  function remoteFx(squares, lines) {
+    if (squares && squares.length) {
+      for (const s of squares) flashSquares.add(s);
+      renderBoard();
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => { flashSquares.clear(); renderBoard(); }, 1800);
+    }
+    if (lines && lines.length) {
+      SFX().enemyAugment();
+      for (const t of lines.slice(-3)) {
+        const m = t.match(/^⚡ \[([A-Z]\d+[a-z])\] (.*?) 발동 — (.*)$/);
+        if (m) banner(`⚡ 상대의 ${m[2]} ${m[1]} 발동`, m[3], 'enemy', 3400);
+        else banner(t, '', 'enemy', 3000);
+      }
+    } else if (squares && squares.length) {
+      SFX().enemyAugment();
+      banner('⚡ 상대의 증강으로 판이 바뀌었습니다', squares.map(E.sqName).join(' '), 'enemy', 2600);
+    }
+  }
+
+  /* 상대가 증강을 고르는 중 (온라인) — 판 가운데 안내와 오른쪽 남은 시간.
+     상대 화면의 30초 타이머와 같은 값을 보여 준다. */
+  function renderOppDraft() {
+    const mid = $('#oppdraft'), bar = $('#oppdrafttimer');
+    if (!mid || !bar) return;
+    const on = !!oppDraft && Game().mode === 'online' && G() && !G().result;
+    mid.hidden = !on; bar.hidden = !on;
+    if (!on) return;
+    if (!mid.firstChild) {
+      const c = el('div', 'oppdraftcard');
+      c.appendChild(el('div', 'odtitle', '상대가 증강을 고르는 중입니다'));
+      c.appendChild(el('div', 'odsub', ''));
+      c.appendChild(el('div', 'odtime', ''));
+      mid.appendChild(c);
+      bar.appendChild(el('span', 'odlabel', '상대 증강 선택'));
+      const tb = el('div', 'dtbar'); tb.appendChild(el('div', 'dtfill')); bar.appendChild(tb);
+      bar.appendChild(el('span', 'dtnum', ''));
+    }
+    mid.querySelector('.odsub').textContent = oppDraft.piece ? `${oppDraft.piece} · ${oppDraft.tier}개 티어 증강 중 하나` : '';
+    tickOppDraft();
+  }
+  function tickOppDraft() {
+    if (!oppDraft) return;
+    const mid = $('#oppdraft'), bar = $('#oppdrafttimer');
+    if (!mid || mid.hidden || !mid.firstChild) return;
+    const left = Math.max(0, oppDraft.left - (Date.now() - oppDraft.at));
+    const sec = Math.ceil(left / 1000);
+    mid.querySelector('.odtime').textContent = `남은 시간 ${sec}초`;
+    bar.querySelector('.dtnum').textContent = String(sec);
+    bar.querySelector('.dtfill').style.width = (left / (oppDraft.limit || 30000) * 100) + '%';
+    bar.classList.toggle('urgent', left <= 10000);
   }
 
   function banner(title, body, cls, ms) {
@@ -1498,7 +1714,7 @@
     btns.append(login, signup, cancel);
     form.append(id, pw, err, btns);
     wrap.appendChild(form);
-    const close = overlay(wrap);
+    const close = overlay(wrap, { keepClock: true });
     cancel.onclick = () => close();
     setTimeout(() => id.focus(), 0);
 
@@ -1650,7 +1866,7 @@
     }
 
     drawSegs(); fill();
-    const close = overlay(wrap, { wide: true, fill: true });
+    const close = overlay(wrap, { wide: true, fill: true, keepClock: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
@@ -1688,7 +1904,8 @@
     const basics = el('div', 'rgrid');
     for (const row of [
       ['두는 법', '기물을 클릭하거나 끌어서 놓습니다. 갈 수 있는 칸에 점이 찍힙니다.'],
-      ['제한시간', '다 쓰면 집니다. 증강을 고르거나 대상을 찍는 동안에는 시계가 멈춥니다.'],
+      ['수 예약', '상대 차례에 내 기물을 끌어 놓아 두면 내 차례가 오는 순간 그 수를 둡니다. 우클릭이나 Esc 로 취소합니다.'],
+      ['제한시간', '다 쓰면 집니다. 한 수를 둘 때마다 증분(예: 5분+3초의 3초)을 돌려받고, 증강을 고르거나 대상을 찍는 동안에는 시계가 멈춥니다.'],
       ['증강이 발동하면', '바뀐 칸이 금색으로 빛나고, 어떤 증강 때문인지 배너와 진행 기록에 남습니다.'],
       ['지난 판 보기', '진행 기록에서 착수 줄을 누르면 그때의 판을 그대로 다시 볼 수 있습니다.'],
     ]) {
@@ -1725,7 +1942,7 @@
     body.appendChild(terms);
 
     wrap.appendChild(body);
-    const close = overlay(wrap, { wide: true, fill: true });
+    const close = overlay(wrap, { wide: true, fill: true, keepClock: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }
 
@@ -1821,22 +2038,32 @@
               hideLobby();
             }
           } else if (inOnlineGame() && !(G() && G().result)) {   // 이미 끝난 판이면 알리지 않는다
+            oppDraft = null; render();
             netBanner('상대의 연결이 끊겼습니다 — 돌아오기를 기다리는 중\u2026', 'warn', true);
           }
           return;
 
         case 'state':
+          oppDraft = null;
           await Game().adoptRemote(m);
           return;
 
         case 'note':
-          // 상대가 증강을 고르는 동안 이쪽 화면의 시계도 멈춘다
+          // 상대가 증강을 고르거나 대상을 지정하는 동안 이쪽 화면의 시계도 멈춘다
           if (m.kind === 'pause') { Game().clockPaused = true; }
           else if (m.kind === 'resume') {
             if (m.clock && G()) G().clock = m.clock;
             Game().clockPaused = false;
             Game().startClockTurn();
           }
+          // 상대의 증강 선택 — 남은 시간은 0.5초마다 다시 온다
+          else if (m.kind === 'draft') {
+            const fresh = !oppDraft;
+            oppDraft = { left: +m.left || 0, limit: +m.limit || 30000, piece: m.piece, tier: m.tier, at: Date.now() };
+            if (fresh) SFX().draft();
+            if (!fresh) { tickOppDraft(); return; }
+          }
+          else if (m.kind === 'draftEnd') { oppDraft = null; }
           render();
           return;
 
@@ -1888,7 +2115,7 @@
     no.onclick = () => { close(); rematchPending = false; };
     list.appendChild(yes); list.appendChild(no);
     wrap.appendChild(list);
-    const close = overlay(wrap);
+    const close = overlay(wrap, { keepClock: true });
   }
 
   let pendingTC = null;
@@ -1940,6 +2167,7 @@
       });
       if (gm.checkFlag()) render();
     }
+    if (oppDraft) tickOppDraft();
     requestAnimationFrame(clockLoop);
   }
 
@@ -1998,6 +2226,8 @@
     $('#tcinfo').textContent = tc ? tc.label : '무제한';
     hideHome();
     review = null;
+    premove = null; pmFrom = -1; pmDests = []; clearTimeout(pmTimer);
+    oppDraft = null;
     document.body.classList.remove('reviewing');
     const rb = $('#reviewbar'); if (rb) rb.remove();
     setTab('aug');
@@ -2019,12 +2249,20 @@
   function boot() {
     const gm = Game();
     gm.api = {
-      pickSquare, pickOption, confirm, draft, flash, announce,
+      pickSquare, pickOption, confirm, draft, flash, announce, remoteFx,
       msg: (t) => { toast(t); G().log.push({ t: 'text', text: t }); renderLog(); },
+      // 증강이 판정·소진되는 순간처럼 놓치면 안 되는 일 — 화면 가운데 카드
+      event: (e) => { centerCard({ title: e.title, sub: e.sub, body: e.body, terms: e.terms, cls: e.cls, ms: e.ms || 2600 }); },
       reveal: (id) => gm.revealAug(id),
       grant: (s, id) => gm.grantAug(s, id),
     };
-    gm.onUpdate = (kind) => { sel = -1; dests = []; peek = null; soundForUpdate(kind); render(); };
+    gm.onUpdate = (kind) => {
+      sel = -1; dests = []; peek = null;
+      // 판이 끝났거나 예약할 수 없는 상황이 되면 예약을 접는다
+      if (premove && !canPremove() && !canControl()) { premove = null; pmFrom = -1; pmDests = []; }
+      soundForUpdate(kind); render();
+      if (premove && canControl()) schedulePremove();
+    };
 
     const board = $('#board');
     let fitTimer = null;
@@ -2039,7 +2277,7 @@
     board.addEventListener('pointerleave', () => { if (!(pathHint && pathHint.pinned)) setPathHint(null); });
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
-    board.addEventListener('contextmenu', e => e.preventDefault());
+    board.addEventListener('contextmenu', e => { e.preventDefault(); if (premove || pmFrom >= 0) cancelPremove(); });
 
     // 난이도 (메인은 시작 전 설정, 인게임은 즉시 반영)
     wireDifficulty('#h-diff', false);
