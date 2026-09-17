@@ -5,7 +5,7 @@
 `engine.js` 는 규칙만 본다. 브라우저도 중계 서버도 없이 바로 돈다.
 
 ```
-node tools/test/engine.js   # 합법수 회귀 — P1b 폰 전진 거리 (10항목)
+node tools/test/engine.js   # 규칙 회귀 — P1b 폰 전진 거리 · 지정불가 · 포영 (28항목)
 ```
 
 ## 브라우저
@@ -16,7 +16,12 @@ node tools/test/engine.js   # 합법수 회귀 — P1b 폰 전진 거리 (10항�
 python server/relay.py                 # 8788
 cd tools/test && npm i playwright-core  # 한 번만
 node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 동기화 (26항목)
-node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (74 시나리오)
+node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (77 시나리오)
+node feedback.js    # 피드백 항목을 실제 화면에서 — 칸을 눌러 두고 카드를 눌러 고른다 (48항목)
 ```
+
+`augments.js` 는 `Game.api` 를 가짜로 바꿔 훅만 본다. `feedback.js` 는 반대로 **api 를 손대지 않고**
+판만 차려 놓은 뒤 사람과 같은 길로만 간다 — 칸을 눌러서 두고, 드래프트 카드를 누르고, 대상 지정 바에서 칸을 찍는다.
+그래서 '칸에 점이 찍히는지 · 배지가 붙는지 · 선택지가 잠겨서 오는지 · 창이 언제 뜨는지' 까지 잡힌다.
 
 `harness.js` 의 `EXE` 는 크로미움 경로다. 다른 컴퓨터에서는 `npx playwright install chromium` 뒤 그 경로로 바꾼다.

@@ -52,7 +52,12 @@ const H = require('./harness');
     const orig = Game.api;
     Game.api = {
       async pickSquare(prompt, squares) { T.msgs.push('pickSquare: ' + prompt); return squares && squares.length ? squares[0] : null; },
-      async pickOption(prompt, options) { T.msgs.push('pickOption: ' + prompt); const r = options.filter(o => o.value !== null && !o.block); return r.length ? r[0].value : null; },
+      async pickOption(prompt, options) {
+        T.msgs.push('pickOption: ' + prompt);
+        // 무엇이 잠겨서 왔는지도 남긴다 — '고를 수 없는 건 처음부터 잠겨 있어야 한다' 를 보려면 필요하다
+        T.opts = options.map(o => ({ label: o.label, block: !!o.block }));
+        const r = options.filter(o => o.value !== null && !o.block); return r.length ? r[0].value : null;
+      },
       async confirm(prompt) { T.msgs.push('confirm: ' + prompt); return true; },
       async draft(o) { const p = o.offer.filter(x => !x.block); return p.length ? p[0].aug.id : null; },
       flash() { }, announce() { }, remoteFx() { },
@@ -113,6 +118,9 @@ const H = require('./harness');
     { id: 'B3a', fen: '4k3/8/8/8/8/8/8/2B1K3', act: 'await T.play("e1","d1"); await T.play("e8","d8")', ok: 'Engine.piecesOf(Game.G,"w","p").length === 1 && T.flags("w").B3aDone === "fired"' },
     { id: 'B3b', fen: '4k3/8/8/8/8/8/P7/2B1K3', act: 'await T.play("e1","d1"); await T.play("e8","d8")', ok: 'Engine.piecesOf(Game.G,"w","p").length === 2 && T.flags("w").B3bDone === "fired"' },
     { id: 'B3c', fen: '4k3/8/8/8/8/2p5/8/B3K3', pre: 'Game.G.grave.w.push("n")', act: 'await T.play("a1","c3"); await T.play("e8","d8"); await T.play("e1","d1"); await T.play("d8","e8"); await T.play("d1","e1"); await T.play("e8","d8")', ok: 'T.at("b1") === "nw"' },
+    /* 스폰 칸이 막힌 종류는 고른 뒤에 '불가' 를 보여 주면 안 되고, 처음부터 잠겨서 와야 한다
+       (피드백 '플레이 3'). b1·g1 을 나이트가 막고 있으니 나이트는 잠기고 룩만 고를 수 있다. */
+    { id: 'B3c', fen: '4k3/8/8/8/8/2p5/8/BN2K1N1', pre: 'Game.G.grave.w.push("n"); Game.G.grave.w.push("r")', act: 'await T.play("a1","c3"); await T.play("e8","d8"); await T.play("e1","d1"); await T.play("d8","e8"); await T.play("d1","e1"); await T.play("e8","d8")', ok: 'T.opts.some(o => o.label === "나이트" && o.block) && T.opts.some(o => o.label === "룩" && !o.block) && (T.at("a1") === "rw" || T.at("h1") === "rw")' },
     { id: 'B6a', fen: '4k3/8/8/8/8/8/8/1nB1K3', ok: 'T.effs().includes("bishopRevenge")' },
     { id: 'B6a', fen: '4k3/8/8/8/8/8/2r5/2B1K3', act: 'await T.play("e1","d1"); await T.play("c2","c1")', ok: 'T.at("c1") === null' },
     { id: 'B6b', fen: '4k3/8/8/8/8/8/8/n1B1K3', act: 'await T.play("e1","d1"); await T.play("e8","d8")', ok: 'T.at("a1") === null' },
@@ -136,6 +144,13 @@ const H = require('./harness');
     // 킹
     { id: 'K1a', fen: '4k3/8/8/8/8/7r/8/2QK4', act: 'await T.play("d1","e1"); await T.play("h3","h1")', ok: 'T.at("c1") === "kw" && T.at("e1") === "qw"' },
     { id: 'K1b', fen: '4k3/8/8/8/8/8/8/4K3', ok: 'T.flags("w").K1b === 1' },
+    /* K1b 는 '다른 칸을 한 번 더' 가 아니라 '그 칸의 3개 중 2개' 다.
+       tierIdx 를 되돌려 드래프트를 실제로 열고, 나이트로 처치해 나이트 1개 칸을 펼친다.
+       K1b 를 뺀 나머지 둘이 모두 N1* 이어야 같은 칸에서 두 개를 고른 것이다. */
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/2N5/8/4K3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("c3","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 2 && a.every(x => x.slice(0, 2) === "N1"); })()' },
+    /* 같은 칸의 남은 둘이 다 잠겨 있으면 두 번째는 없다 — 다른 기물 칸으로 넘어가면 안 된다.
+       흑 퀸이 없으면 퀸 1개 칸에서 Q1b·Q1c 가 잠기므로 고를 수 있는 건 Q1a 하나뿐이다. */
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/8/8/3QK3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("d1","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 1 && a[0] === "Q1a"; })()' },
     { id: 'K1c', fen: '4k3/8/8/8/8/8/8/4K3', pre: 'Game.G.bd[T.sq("a1")] = Engine.mkPiece("p","b")', act: 'Engine.removePiece(Game.G, T.sq("a1"), { by: "w" })', ok: 'Game.G.kills.w === 1' },
     { id: 'K3a', fen: '4k3/8/8/8/8/8/8/1NB1K3', ok: 'Game.G.augs.w.length === 2' },
     { id: 'K3b', fen: '4k3/8/8/8/8/8/8/1N2K3', ok: 'Engine.piecesOf(Game.G,"w").length >= 3' },

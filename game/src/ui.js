@@ -1252,11 +1252,14 @@
       const meta = el('div', 'draftmeta');
       meta.appendChild(el('span', 'dpill', `${tier}개 처치`));
       if (byKo) meta.appendChild(el('span', 'dpill dim2', `${byKo}(으)로 처치해서 열림`));
-      if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `${rounds}번 중 ${round}번째`));
+      // K1b — 같은 칸을 두 번 펼친다. '다른 칸이 한 번 더' 로 읽히지 않게 칸 기준으로 적는다.
+      if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `K1b \u00B7 이 칸에서 ${rounds}개 \u00B7 ${round}번째`));
       head.appendChild(meta);
       wrap.appendChild(head);
       const guide = el('div', 'sub');
-      guide.appendChild(document.createTextNode('하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
+      guide.appendChild(document.createTextNode(rounds > 1
+        ? `이 칸의 선택지 중 ${rounds}개를 고릅니다 \u2014 지금은 ${round}번째. 지금 발동할 수 없는 증강은 고를 수 없습니다.  `
+        : '하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
       guide.appendChild(durLegend());
       wrap.appendChild(guide);
 
@@ -1850,9 +1853,11 @@
         const cols = el('div', 'ccols');
         /* 칸마다 카드 높이가 제각각이면 표가 어긋나 보인다.
            가장 많은 칸 수만큼 행을 만들어 두고 티어 칼럼이 그 행을 그대로 쓰게 한다(subgrid).
-           행을 1fr 로 두면 모든 카드가 같은 높이가 된다. */
+           행은 auto 다 — 같은 줄끼리만 높이를 맞추고, 문구가 짧은 카드까지
+           가장 긴 카드 높이로 늘리지는 않는다. 예전에는 1fr 이라 카드마다 빈칸이 크게 남아
+           한 기물 12장이 한 화면에 안 들어왔다 (피드백 '증강 도감 1'). */
         const maxN = rows.reduce((n, r) => Math.max(n, r.list.length), 0);
-        cols.style.gridTemplateRows = `auto repeat(${maxN}, 1fr)`;
+        cols.style.gridTemplateRows = `auto repeat(${maxN}, auto)`;
         for (const r of rows) {
           const col = el('div', 'ccol');
           col.appendChild(el('div', 'ctier', `${r.t}개 처치`));
@@ -1880,10 +1885,30 @@
     head.appendChild(durLegend());
     wrap.appendChild(head);
 
+    /* 네 덩이가 세로로 이어져 있어 아래쪽 용어는 한참 굴려야 나왔다.
+       도감과 같은 자리·같은 모양의 한 줄 차림표를 붙여 바로 건너뛰게 한다 (피드백 '규칙/용어 1'). */
+    const bar = el('div', 'codexbar');
+    const navRow = el('div', 'segrow');
+    navRow.appendChild(el('span', 'seglabel', '바로가기'));
+    const navBox = el('span'); navRow.appendChild(navBox);
+    bar.appendChild(navRow);
+    wrap.appendChild(bar);
+
     const body = el('div', 'codexbody');
+    const marks = {};
+    // h3 는 sticky 라 그냥 scrollIntoView 하면 제목이 윗줄에 가려진다. 직접 offset 을 계산한다.
+    function jump(key) {
+      const t = marks[key];
+      if (t) body.scrollTo({ top: Math.max(0, t.offsetTop - body.offsetTop - 4), behavior: 'smooth' });
+    }
+    function section(label) {
+      const t = el('h3', null, label);
+      marks[label] = t;
+      body.appendChild(t);
+    }
 
     /* ── 1. 증강을 얻는 흐름 ── */
-    body.appendChild(el('h3', null, '증강을 얻는 흐름'));
+    section('증강을 얻는 흐름');
     const flow = el('div', 'flow');
     [
       ['\u2694', '처치한다', '상대 기물을 정상적인 수로 잡습니다. 증강으로 <b>제거</b>한 것은 처치로 세지 않습니다.'],
@@ -1900,7 +1925,7 @@
     body.appendChild(flow);
 
     /* ── 2. 조작 ── */
-    body.appendChild(el('h3', null, '조작'));
+    section('조작');
     const basics = el('div', 'rgrid');
     for (const row of [
       ['두는 법', '기물을 클릭하거나 끌어서 놓습니다. 갈 수 있는 칸에 점이 찍힙니다.'],
@@ -1915,18 +1940,25 @@
     }
     body.appendChild(basics);
 
-    /* ── 3. 전역 룰 (설계 사유는 기획 문서에만 두고 여기서는 생략) ── */
-    body.appendChild(el('h3', null, '전역 룰'));
+    /* ── 3. 전역 룰 ──
+       설계 사유(why)는 기획 문서에만 두고 여기서는 애초에 안 그린다.
+       남은 본문도 증강 ID 가 섞인 예외 설명이라 처음 보는 사람에게는 읽을거리가 아니다.
+       이름만 먼저 보여 주고 본문은 접어 둔다 — 궁금한 줄만 눌러서 편다 (피드백 '규칙/용어 2'). */
+    section('전역 룰');
+    body.appendChild(el('div', 'rhint', '이름만 먼저 보여 줍니다. 자세한 예외는 눌러서 펴 보세요.'));
     const rules = el('div', 'rgrid');
     for (const r of global.GLOBAL_RULES) {
-      const c = el('div', 'rcard');
-      c.innerHTML = '<div class="rname">' + r.name + '</div><div class="ctext">' + r.body + '</div>';
+      const c = el('details', 'rcard rfold');
+      const sm = el('summary', 'rname', r.name);
+      c.appendChild(sm);
+      c.appendChild(el('div', 'ctext', r.body));
+      c.ontoggle = () => { if (c.open) SFX().pick(); };
       rules.appendChild(c);
     }
     body.appendChild(rules);
 
     /* ── 4. 용어 (증강 문구에 칠해지는 색 그대로) ── */
-    body.appendChild(el('h3', null, '용어'));
+    section('용어');
     const terms = el('div', 'rgrid');
     for (const g2 of global.GLOSSARY) {
       const st = global.TERM_STYLES[g2.term];
@@ -1942,6 +1974,9 @@
     body.appendChild(terms);
 
     wrap.appendChild(body);
+    navBox.appendChild(segmented(
+      Object.keys(marks).map(k => ({ label: k, value: k })),
+      '', v => jump(v)));
     const close = overlay(wrap, { wide: true, fill: true, keepClock: true });
     const x = el('button', 'closebtn', '닫기'); x.onclick = close; wrap.appendChild(x);
   }

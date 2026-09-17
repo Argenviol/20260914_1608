@@ -227,14 +227,25 @@
       const tier = global.TIERS[G.tierIdx[side]];
       G.tierIdx[side]++;
 
-      // K1b 는 '선택지 2개' 가 아니라 '드래프트를 한 번 더' 로 처리한다.
-      // (증강은 언제나 한 번에 하나만 고른다)
+      /* K1b — "다음 증강을 고를 때 선택지를 두 개 고를 수 있습니다".
+         펼치는 칸은 그대로 하나다. 그 칸의 선택지 3개 중 2개를 고르는 것이지,
+         다른 기물 칸을 한 번 더 펼치는 것이 아니다.
+         그래서 칸은 첫 번째에만 고르고, 두 번째는 같은 칸을 다시 펼친다
+         (방금 고른 카드는 '이미 보유한 증강입니다' 로 잠겨서 온다). */
       let rounds = 1;
       if (G.flags[side].K1b) { rounds = 2; G.flags[side].K1b = 0; }
 
+      let cellKo = null;
       for (let r = 0; r < rounds; r++) {
-        const cell = chooseCell(G, side, tier, byKo);
-        if (!cell || !pickableCount(cell.offer)) break;
+        const cell = r === 0
+          ? chooseCell(G, side, tier, byKo)
+          : { ko: cellKo, offer: cellOffer(G, side, tier, cellKo) };
+        if (!cell || !pickableCount(cell.offer)) {
+          // 같은 칸의 남은 둘이 다 잠겨 있으면 두 번째는 없다 — 다른 칸으로 넘기지 않는다
+          if (r > 0) pushLog(`K1b — ${cellKo} ${tier}개 칸에 더 고를 수 있는 증강이 없어 하나만 골랐습니다.`);
+          break;
+        }
+        cellKo = cell.ko;
         const isAI = Game.mode === 'ai' && side === Game.aiSide;
         let chosenId;
         if (isAI) {
