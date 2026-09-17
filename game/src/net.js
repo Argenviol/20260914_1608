@@ -104,7 +104,8 @@
   Net.joinRoom = function (code, tc) { Net.connect(); waitOpen(() => raw({ t: 'join', code, tc })); };
   Net.resign = function () { raw({ t: 'resign' }); };
   // 시계 멈춤/재개처럼 판을 바꾸지 않는 짧은 신호
-  Net.note = function (kind, clock) { raw({ t: 'note', kind, clock }); };
+  // extra: 증강 선택 중 남은 시간처럼 kind 마다 딸려 가는 값
+  Net.note = function (kind, clock, extra) { raw(Object.assign({ t: 'note', kind, clock }, extra || {})); };
   Net.askRematch = function () { raw({ t: 'rematch' }); };
   Net.abort = function () { raw({ t: 'abort' }); };
   Net.chat = function (text, emote) { raw({ t: 'chat', text, emote }); };

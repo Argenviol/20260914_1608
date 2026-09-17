@@ -10,7 +10,7 @@
     mode: 'pvp',          // 'pvp' | 'ai'
     aiSide: 'b',
     difficulty: 'normal', // 'easy' | 'normal' | 'hard'
-    timeControl: { base: 600000, inc: 5000, label: '10분 + 5초' },  // null 이면 무제한
+    timeControl: { base: 300000, inc: 3000, label: '5분 + 3초' },  // null 이면 무제한. 메인의 기본값과 같다
     api: null,            // UI 가 주입
     busy: false,
     onUpdate: null,
@@ -89,6 +89,7 @@
       async confirm() { return Math.random() < 0.5; },
       msg(t) { pushLog(`[AI] ${t}`); },
       flash() { },
+      event() { },
       reveal(id) { revealAug(id); },
       async grant(s, id) { await grantAug(s, id); },
     };
@@ -385,9 +386,11 @@
     // 이 시점의 판을 기록에서 되돌려 볼 수 있도록 남긴다
     pushSnapshot(side, from, move.to);
 
-    // 상대가 둔 직후 훅 (증강 소유자 기준)
-    // 구현이 B1b 하나뿐이고 사람에게 묻지 않는다 → 둔 쪽에서 돌려도 안전하다
-    await fire('onOppMoved', opp(side), { move });
+    /* 상대가 둔 직후 훅 (증강 소유자 기준). 구현이 B1b 하나뿐이고 사람에게 묻지 않는다.
+       온라인에서는 여기서 돌리면 안 된다 — 이 화면에는 상대의 비밀 증강이 가면('?b1')으로만
+       있어서 구현이 비어 있다. B1b 가 온라인에서 한 번도 발동하지 않던 원인.
+       상대 화면이 판을 받았을 때(adoptRemote) 자기 증강으로 돌린다. */
+    if (Game.mode !== 'online') await fire('onOppMoved', opp(side), { move });
 
     // 온라인 대전의 경계.
     // beginTurn 안에는 onSched(B3c 부활 선택) 처럼 '차례가 시작되는 쪽'이 답해야 하는
@@ -401,19 +404,64 @@
   }
 
   /* ───────── 온라인: 받은 판을 채택하고, 내 차례면 턴을 연다 ───────── */
+  // 받은 판에서 '방금 둔 수' 가 아닌데 바뀐 칸 — 상대 증강이 지우거나 옮긴 자리다
+  const shownFx = new Set();
+  function remoteChanges(before, G, s) {
+    const after = snap(G);
+    const skip = new Set();
+    const lm = s && s.snapAdd ? G.lastBySide[s.snapAdd.side] : null;
+    if (lm) {
+      skip.add(lm.from); skip.add(lm.to);
+      const r = lm.from >> 3;
+      if (lm.castle === 'k') { skip.add(E.idx(r, 7)); skip.add(E.idx(r, 5)); }
+      if (lm.castle === 'q') { skip.add(E.idx(r, 0)); skip.add(E.idx(r, 3)); }
+      if (lm.victim && !G.bd[lm.to]) skip.add(lm.to);
+      if (lm.type === 'p' && lm.victim && ((lm.from & 7) !== (lm.to & 7))) skip.add(E.idx(lm.from >> 3, lm.to & 7));   // 앙파상
+    }
+    return diffSnap(before, after).filter(i => !skip.has(i));
+  }
+  // 받은 기록에서 마지막 착수 줄 뒤에 붙은 증강 줄 — 상대 화면에서만 배너로 떴던 것들
+  function remoteLines(G) {
+    const out = [];
+    for (let i = G.log.length - 1; i >= 0; i--) {
+      const e = G.log[i];
+      if (e.t !== 'text') continue;
+      if (e.text.indexOf('→') >= 0 && e.text.indexOf('⚡') < 0) break;
+      // '⚡ [id] … 발동' 줄만. 화면 효과가 남긴 '⚡ 백의 … 발동 — e4' 줄은 같은 일의 중복이다.
+      if (/^⚡ \[/.test(e.text) || (!/^⚡/.test(e.text) && /제거|포영|변이|소환|부활|교환|공개/.test(e.text))) out.unshift(e.text);
+    }
+    return out.filter(t => { const k = G.ply + '|' + t; if (shownFx.has(k)) return false; shownFx.add(k); return true; });
+  }
+
   Game.adoptRemote = async function (s) {
     const G = Game.G;
     if (!G || Game.mode !== 'online') return;
 
+    const me = Game.mySide, foe = opp(me);
+    const before = snap(G);
+    const prevFoeAugs = G.augs[foe].slice();
+
     const newlyRevealed = global.Net.adopt(s) || [];
+    Game.oppDraft = null;                     // 판이 왔다는 건 상대의 증강 선택이 끝났다는 뜻
     for (const id of newlyRevealed) {
       const a = global.AUG_BY_ID[id];
       if (!a || a.hidden) continue;
       const owner = G.augs.w.includes(id) ? 'w' : (G.augs.b.includes(id) ? 'b' : null);
-      if (owner && owner !== Game.mySide && Game.api && Game.api.announce) {
-        Game.api.announce(owner, id, 'reveal');
-      }
+      if (!owner || owner === me || !Game.api || !Game.api.announce) continue;
+      /* revealed 에는 비밀이 아닌 증강도 얻는 순간 들어간다(grantAug).
+         그걸 전부 '비밀 증강 공개' 로 알리던 게, 비밀도 아닌 첫 증강이
+         "비밀 증강이 공개되었습니다" 로 뜨던 원인이다. 얻은 것은 얻었다고 알린다. */
+      Game.api.announce(owner, id, a.secret ? 'reveal' : 'gain');
     }
+    // 상대가 새로 얻은 비밀 증강 — 가면('?w1')으로만 오지만 얻었다는 사실은 알린다
+    for (const id of G.augs[foe]) {
+      const a = global.AUG_BY_ID[id];
+      if (a && a.hidden && prevFoeAugs.indexOf(id) < 0 && Game.api && Game.api.announce) Game.api.announce(foe, id, 'secret');
+    }
+    // 상대 증강이 지우거나 옮긴 칸을 이쪽 화면에서도 보여 준다 (예전에는 그냥 사라졌다)
+    const changed = remoteChanges(before, G, s);
+    const lines = remoteLines(G);
+    if ((changed.length || lines.length) && Game.api && Game.api.remoteFx) Game.api.remoteFx(changed, lines);
 
     Game.startClockTurn();
     Game.clockPaused = false;
@@ -422,10 +470,14 @@
 
     // 내 차례가 아니거나(상대의 턴 시작 결과였음), 이미 이 ply 의 턴을 연 적이 있으면 끝.
     // 두 번째 조건이 없으면 새로고침으로 재접속했을 때 예약 증강이 또 터진다.
-    if (G.turn !== Game.mySide || G.begunPly === G.ply) return;
+    if (G.turn !== me || G.begunPly === G.ply) return;
 
     Game.busy = true;
-    try { await beginTurn(G.turn); }
+    try {
+      // 상대가 방금 둔 수에 대한 내 증강(B1b) — 내 화면에서만 실제 구현이 있다
+      if (s.snapAdd && s.snapAdd.side === foe) await fire('onOppMoved', me, { move: { from: s.snapAdd.from, to: s.snapAdd.to } });
+      await beginTurn(G.turn);
+    }
     finally { Game.busy = false; }
     G.begunPly = G.ply;
 
@@ -604,10 +656,15 @@
   Game.activate = async function (id) {
     const G = Game.G, side = G.turn;
     if (Game.busy || G.result) return;
+    // 온라인에서는 내 차례에 내 증강만. (상대 것을 이 화면에서 돌리면 내 판만 바뀌고 곧 덮어써진다)
+    if (Game.mode === 'online' && side !== Game.mySide) return;
+    if (!G.augs[side].includes(id)) return;
     Game.busy = true;
     try { await fire2(id, 'activate', side, null); }
     finally { Game.busy = false; }
     if (Game.onUpdate) Game.onUpdate('activate');
+    // 발동으로 바뀐 판을 바로 넘긴다 — 다음 수를 둘 때까지 상대 화면이 옛 판이던 것
+    if (Game.mode === 'online' && !G.result) global.Net.push(null);
   };
 
   /* ───────── 대국 시계 ───────── */
@@ -744,6 +801,8 @@
     const tc = Game.timeControl;
     Game.G.clock = tc ? { w: tc.base, b: tc.base, inc: tc.inc, limit: tc.base } : null;
     Game.clockPaused = false;
+    Game.oppDraft = null;
+    shownFx.clear();
     Game.startClockTurn();
     Game.lastMove = null;
     Game.busy = false;

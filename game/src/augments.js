@@ -509,24 +509,45 @@
     }
   });
 
+  /* 판정은 한 번뿐(횟수제한). 결과를 flags[id+'Done'] 에 'fired' | 'miss' 로 남겨
+     카드가 '판정 끝' 을 보여 주고, 판정 순간에는 화면 가운데에 알린다 —
+     예전에는 조건이 안 맞으면 토스트 한 줄뿐이라 증강이 그냥 사라진 것처럼 보였다. */
   function parityPawn(parityIsOdd, id) {
+    const parityKo = parityIsOdd ? '홀수' : '짝수';
     return {
       async onGain(G, side) { sched(G, side, id, E.untilMyTurns(G, 1), {}); },
       async onSched(G, side, api) {
         const s = E.materialScore(G, side);
         const isOdd = s % 2 === 1;
-        if (isOdd !== parityIsOdd) { api.msg(`${id} — 기물점수 합 ${s} (조건 불일치, 발동하지 않음)`); return; }
+        if (isOdd !== parityIsOdd) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: `아군 기물 점수 합이 ${s}(${isOdd ? '홀수' : '짝수'})라 ${parityKo}가 아닙니다. 폰을 소환하지 않고 사라집니다.`, cls: 'spent' });
+          api.msg(`${id} — 기물점수 합 ${s} (${parityKo} 아님 · 불발)`);
+          return;
+        }
         const empties = emptyHome(G, side);
-        if (!empties.length) { api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`); return; }
+        if (!empties.length) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: '아군 진영에 빈칸이 없어 폰을 소환하지 못했습니다.', cls: 'spent' });
+          api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`);
+          return;
+        }
         const sq = await api.pickSquare(`${id} — 폰을 소환할 아군 진영 빈칸을 고르세요 (기물점수 합 ${s})`, empties);
         if (sq == null) return;
         const p = E.mkPiece('p', side); p.moved = true;
         G.bd[sq] = p;
+        G.flags[side][id + 'Done'] = 'fired';
         api.reveal(id);
-        api.msg(`${id} — 기물점수 합이 ${parityIsOdd ? '홀' : '짝'}수(${s})라 폰을 소환했습니다.`);
+        api.event({ title: `${id} 발동 — 폰 소환`, body: `아군 기물 점수 합 ${s}(${parityKo}) → ${E.sqName(sq)} 에 폰을 소환했습니다.`, cls: 'mine' });
+        api.msg(`${id} — 기물점수 합이 ${parityKo}(${s})라 폰을 소환했습니다.`);
       }
     };
   }
+  // 카드에 '지금 점수 합 · 판정 상태' 를 적을 때 쓴다
+  global.parityStatus = function (G, side, id) {
+    const s = E.materialScore(G, side), odd = s % 2 === 1, want = id === 'B3a';
+    return { sum: s, odd, ok: odd === want, done: G.flags[side][id + 'Done'] || null };
+  };
   def('B3a', parityPawn(true, 'B3a'));
   def('B3b', parityPawn(false, 'B3b'));
 
