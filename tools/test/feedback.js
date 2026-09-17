@@ -326,6 +326,32 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
     check('킹 칸 밖의 증강은 K3a 가 준 것 하나뿐', augs.filter(x => x[0] !== 'K').length, 1);
   }
 
+  /* ── 제한시간 칸 ──
+     예전에는 아래 줄에 하나(AI·2인용) · 온라인 카드에 하나라 똑같이 '제한시간' 인 칸이 둘이었고,
+     어느 쪽이 먹는지 알 수 없었다. 이제 카드마다 하나씩, 누르는 버튼 바로 위에 있다. ── */
+  {
+    const home = async () => {
+      await P.goto('http://127.0.0.1:8788/', { waitUntil: 'networkidle' });
+      await P.selectOption('#ai-tc', '10+5');
+      await P.selectOption('#pvp-tc', 'none');
+      await P.selectOption('#o-tc', '3+2');
+    };
+    await home();
+    check('제한시간 칸은 카드마다 하나씩 셋',
+      await P.$$eval('#home select', ns => ns.map(n => n.id)), ['ai-tc', 'pvp-tc', 'o-tc']);
+    check('아래 줄에는 제한시간 칸이 없다', await P.$$eval('.homefoot select', n => n.length), 0);
+    check('칸마다 자기 카드 안에 있다', await P.$$eval('.modecard .tcsel', n => n.length), 3);
+
+    await P.click('#h-ai');
+    await P.waitForFunction(() => window.Game && Game.G && !document.body.classList.contains('athome'));
+    check('AI 대전은 AI 카드의 칸을 쓴다', await P.$eval('#tcinfo', n => n.textContent), '10분 + 5초');
+
+    await home();
+    await P.click('#h-pvp');
+    await P.waitForFunction(() => window.Game && Game.G && !document.body.classList.contains('athome'));
+    check('2인 대전은 2인 카드의 칸을 쓴다', await P.$eval('#tcinfo', n => n.textContent), '무제한');
+  }
+
   console.log('\n' + pass + ' pass, ' + fails.length + ' fail' + (fails.length ? ': ' + fails.join(' / ') : ''));
   console.log('errors:', P.errors.slice(0, 5));
   await browser.close();

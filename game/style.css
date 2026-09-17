@@ -180,6 +180,17 @@ input[type=range]::-moz-range-thumb {
   display: grid; grid-template-columns: repeat(3, 1fr);
   gap: var(--wds-space-6); margin-bottom: var(--wds-space-16);
 }
+/* 모드 카드 안의 제한시간 — 난이도 세그먼트와 같은 폭·같은 자리에 선다 */
+.tcsel {
+  width: 100%; margin-bottom: var(--wds-space-16);
+  background: var(--wds-background-normal-normal);
+  color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-8) var(--wds-space-10);
+  font: inherit; font-size: var(--wds-label1-size); cursor: pointer;
+}
+.tcsel:hover { border-color: var(--wds-primary-normal); }
 .difficulty button {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-normal);
