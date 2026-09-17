@@ -11,4 +11,11 @@
 - PR 은 사용자가 따로 말할 때만 만든다.
 
 ## 답변
-- 답변은 항상 배포 주소로 끝낸다: https://unnamed-chess.onrender.com/
+- 답변은 **맨 끝 한 번만** 두 곳을 링크로 걸어 마무리한다. 중간에 또 적지 않는다.
+  - 올린 곳: https://github.com/Argenviol/20260914_1608/branches
+  - 해 보기: https://unnamed-chess.onrender.com/
+- 주소만 덩그러니 붙이지 않는다. **무슨 브랜치에 무엇을 올렸고, 가서 무엇을 보면 되는지**를
+  링크에 얹어 한 줄로 적는다. 예:
+
+  > **올린 곳** [`김준영_20260917_1338`](https://github.com/Argenviol/20260914_1608/branches) — 커밋 4개 · 화면 정리와 `K1b` 수정
+  > **해 보기** [무제체스](https://unnamed-chess.onrender.com/) — 증강 고르는 중에 '판 보기' 를 눌러 보면 바뀐 안내가 보인다
