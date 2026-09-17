@@ -5,7 +5,7 @@
 `engine.js` 는 규칙만 본다. 브라우저도 중계 서버도 없이 바로 돈다.
 
 ```
-node tools/test/engine.js   # 합법수 회귀 — P1b 폰 전진 거리 (10항목)
+node tools/test/engine.js   # 규칙 회귀 — P1b 폰 전진 거리 · 지정불가 · 포영 (28항목)
 ```
 
 ## 브라우저
@@ -16,7 +16,7 @@ node tools/test/engine.js   # 합법수 회귀 — P1b 폰 전진 거리 (10항�
 python server/relay.py                 # 8788
 cd tools/test && npm i playwright-core  # 한 번만
 node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 동기화 (26항목)
-node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (74 시나리오)
+node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (75 시나리오)
 ```
 
 `harness.js` 의 `EXE` 는 크로미움 경로다. 다른 컴퓨터에서는 `npx playwright install chromium` 뒤 그 경로로 바꾼다.
