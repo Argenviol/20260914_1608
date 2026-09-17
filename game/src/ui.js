@@ -2157,10 +2157,14 @@
 
   let onlineColor = 'r';           // 'w' | 'b' | 'r'(랜덤)
 
-  function onlineTC() {
-    const sel = $('#o-tc');
-    return parseTC(sel ? sel.value : $('#h-tc').value);
+  /* 제한시간은 모드 카드마다 따로 고른다 — 누르는 버튼 바로 위 칸이 그 판에 쓰인다.
+     예전에는 아래 줄에 하나(#h-tc, AI·2인용), 온라인 카드에 하나(#o-tc) 라
+     똑같이 '제한시간' 이라고 적힌 칸이 둘이었고 어느 쪽이 먹는지 알 수 없었다. */
+  function tcFor(mode) {
+    const sel = $(mode === 'ai' ? '#ai-tc' : mode === 'pvp' ? '#pvp-tc' : '#o-tc');
+    return parseTC(sel ? sel.value : 'none');
   }
+  function onlineTC() { return tcFor('online'); }
 
   function hostRoom() {
     pendingTC = onlineTC();
@@ -2257,7 +2261,7 @@
     $('#banners').innerHTML = '';
     // 온라인에서는 내 색이 아래로 오게 둔다
     flip = mode === 'online' && opts.mySide === 'b';
-    const tc = opts.timeControl !== undefined ? opts.timeControl : parseTC($('#h-tc').value);
+    const tc = opts.timeControl !== undefined ? opts.timeControl : tcFor(mode);
     $('#tcinfo').textContent = tc ? tc.label : '무제한';
     hideHome();
     review = null;

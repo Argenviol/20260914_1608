@@ -34,6 +34,14 @@
             <button data-lv="normal" class="on"><b>중급</b><span>정석대로</span></button>
             <button data-lv="hard"><b>고급</b><span>진심으로</span></button>
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="ai-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn" id="h-ai">AI 대전 시작</button>
         </div>
 
@@ -49,6 +57,14 @@
             비밀 증강도 서로에게 공개됩니다.<br>
             판 뒤집기로 진영을 바꿔가며 두세요.
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="pvp-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn alt" id="h-pvp">2인 대전 시작</button>
         </div>
 
@@ -61,15 +77,14 @@
             </div>
           </div>
           <div class="onlineopt">
-            <label class="fld">제한시간
-              <select id="o-tc">
-                <option value="none">무제한</option>
-                <option value="3+2">3분 + 2초</option>
-                <option value="5+3" selected>5분 + 3초</option>
-                <option value="10+5">10분 + 5초</option>
-                <option value="20+10">20분 + 10초</option>
-              </select>
-            </label>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="o-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
             <div class="colorpick" id="o-color">
               <span class="fldlabel">내 색</span>
               <button data-c="w" title="백으로 둡니다">♙ 백</button>
@@ -92,15 +107,6 @@
     </div>
 
     <div class="homefoot">
-      <label class="fld">제한시간
-        <select id="h-tc">
-          <option value="none">무제한</option>
-          <option value="3+2">3분 + 2초</option>
-          <option value="5+3" selected>5분 + 3초</option>
-          <option value="10+5">10분 + 5초</option>
-          <option value="20+10">20분 + 10초</option>
-        </select>
-      </label>
       <label class="fld vol">
         <button class="soundbtn" id="h-sound" title="소리 켜기/끄기">🔊</button>
         <input type="range" id="h-vol" min="0" max="100" value="75">
