@@ -16,7 +16,7 @@ node tools/test/engine.js   # 규칙 회귀 — P1b 폰 전진 거리 · 지정�
 python server/relay.py                 # 8788
 cd tools/test && npm i playwright-core  # 한 번만
 node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 동기화 (26항목)
-node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (75 시나리오)
+node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (77 시나리오)
 ```
 
 `harness.js` 의 `EXE` 는 크로미움 경로다. 다른 컴퓨터에서는 `npx playwright install chromium` 뒤 그 경로로 바꾼다.

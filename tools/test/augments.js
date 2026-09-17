@@ -144,6 +144,13 @@ const H = require('./harness');
     // 킹
     { id: 'K1a', fen: '4k3/8/8/8/8/7r/8/2QK4', act: 'await T.play("d1","e1"); await T.play("h3","h1")', ok: 'T.at("c1") === "kw" && T.at("e1") === "qw"' },
     { id: 'K1b', fen: '4k3/8/8/8/8/8/8/4K3', ok: 'T.flags("w").K1b === 1' },
+    /* K1b 는 '다른 칸을 한 번 더' 가 아니라 '그 칸의 3개 중 2개' 다.
+       tierIdx 를 되돌려 드래프트를 실제로 열고, 나이트로 처치해 나이트 1개 칸을 펼친다.
+       K1b 를 뺀 나머지 둘이 모두 N1* 이어야 같은 칸에서 두 개를 고른 것이다. */
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/2N5/8/4K3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("c3","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 2 && a.every(x => x.slice(0, 2) === "N1"); })()' },
+    /* 같은 칸의 남은 둘이 다 잠겨 있으면 두 번째는 없다 — 다른 기물 칸으로 넘어가면 안 된다.
+       흑 퀸이 없으면 퀸 1개 칸에서 Q1b·Q1c 가 잠기므로 고를 수 있는 건 Q1a 하나뿐이다. */
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/8/8/3QK3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("d1","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 1 && a[0] === "Q1a"; })()' },
     { id: 'K1c', fen: '4k3/8/8/8/8/8/8/4K3', pre: 'Game.G.bd[T.sq("a1")] = Engine.mkPiece("p","b")', act: 'Engine.removePiece(Game.G, T.sq("a1"), { by: "w" })', ok: 'Game.G.kills.w === 1' },
     { id: 'K3a', fen: '4k3/8/8/8/8/8/8/1NB1K3', ok: 'Game.G.augs.w.length === 2' },
     { id: 'K3b', fen: '4k3/8/8/8/8/8/8/1N2K3', ok: 'Engine.piecesOf(Game.G,"w").length >= 3' },

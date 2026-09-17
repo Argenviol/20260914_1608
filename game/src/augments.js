@@ -830,7 +830,8 @@
     }
   });
 
-  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 강화에서 선택지를 2개 고릅니다.'); } });
+  // 다음 드래프트에서 '그 칸' 을 한 번 더 펼친다 — 3개 중 2개다 (game.js 의 runDrafts)
+  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 드래프트에서 그 칸의 선택지 중 2개를 고릅니다.'); } });
 
 
   function grantFrom(pieces, tier, label) {

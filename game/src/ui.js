@@ -1252,11 +1252,14 @@
       const meta = el('div', 'draftmeta');
       meta.appendChild(el('span', 'dpill', `${tier}개 처치`));
       if (byKo) meta.appendChild(el('span', 'dpill dim2', `${byKo}(으)로 처치해서 열림`));
-      if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `${rounds}번 중 ${round}번째`));
+      // K1b — 같은 칸을 두 번 펼친다. '다른 칸이 한 번 더' 로 읽히지 않게 칸 기준으로 적는다.
+      if (rounds > 1) meta.appendChild(el('span', 'dpill gold', `K1b \u00B7 이 칸에서 ${rounds}개 \u00B7 ${round}번째`));
       head.appendChild(meta);
       wrap.appendChild(head);
       const guide = el('div', 'sub');
-      guide.appendChild(document.createTextNode('하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
+      guide.appendChild(document.createTextNode(rounds > 1
+        ? `이 칸의 선택지 중 ${rounds}개를 고릅니다 \u2014 지금은 ${round}번째. 지금 발동할 수 없는 증강은 고를 수 없습니다.  `
+        : '하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
       guide.appendChild(durLegend());
       wrap.appendChild(guide);
 
