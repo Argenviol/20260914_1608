@@ -26,8 +26,20 @@
   function sched(G, side, tag, fireAt, data) {
     return E.addEff(G, Object.assign({ kind: 'sched', owner: side, tag, fireAt }, data || {}));
   }
+  /* R3c 룩은 '제거 · 포영 · 교환 · 지정불가' 에 면역이다.
+     앞의 셋은 engine 의 removePiece · phaseOut · swapPieces 가 각각 막고 있었는데
+     지정불가만 빠져 있어서, 카드 문구에는 있는 면역이 실제로는 안 걸렸다. 여기서 한 번에 거른다. */
   function untarget(G, side, ids, until) {
-    return E.addEff(G, { kind: 'untargetable', owner: side, ids: ids.filter(Boolean), until });
+    const keep = ids.filter(id => {
+      if (!id) return false;
+      for (let i = 0; i < 64; i++) {
+        const p = G.bd[i];
+        if (p && p.id === id) return !E.immune(G, p);
+      }
+      return true;                       // 판에 없는 기물(포영 중 등)은 그대로 둔다
+    });
+    if (!keep.length) return null;
+    return E.addEff(G, { kind: 'untargetable', owner: side, ids: keep, until });
   }
   function adj(i, includeDiag) {
     const [r, c] = rc(i), out = [];
@@ -509,24 +521,45 @@
     }
   });
 
+  /* 판정은 한 번뿐(횟수제한). 결과를 flags[id+'Done'] 에 'fired' | 'miss' 로 남겨
+     카드가 '판정 끝' 을 보여 주고, 판정 순간에는 화면 가운데에 알린다 —
+     예전에는 조건이 안 맞으면 토스트 한 줄뿐이라 증강이 그냥 사라진 것처럼 보였다. */
   function parityPawn(parityIsOdd, id) {
+    const parityKo = parityIsOdd ? '홀수' : '짝수';
     return {
       async onGain(G, side) { sched(G, side, id, E.untilMyTurns(G, 1), {}); },
       async onSched(G, side, api) {
         const s = E.materialScore(G, side);
         const isOdd = s % 2 === 1;
-        if (isOdd !== parityIsOdd) { api.msg(`${id} — 기물점수 합 ${s} (조건 불일치, 발동하지 않음)`); return; }
+        if (isOdd !== parityIsOdd) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: `아군 기물 점수 합이 ${s}(${isOdd ? '홀수' : '짝수'})라 ${parityKo}가 아닙니다. 폰을 소환하지 않고 사라집니다.`, cls: 'spent' });
+          api.msg(`${id} — 기물점수 합 ${s} (${parityKo} 아님 · 불발)`);
+          return;
+        }
         const empties = emptyHome(G, side);
-        if (!empties.length) { api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`); return; }
+        if (!empties.length) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: '아군 진영에 빈칸이 없어 폰을 소환하지 못했습니다.', cls: 'spent' });
+          api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`);
+          return;
+        }
         const sq = await api.pickSquare(`${id} — 폰을 소환할 아군 진영 빈칸을 고르세요 (기물점수 합 ${s})`, empties);
         if (sq == null) return;
         const p = E.mkPiece('p', side); p.moved = true;
         G.bd[sq] = p;
+        G.flags[side][id + 'Done'] = 'fired';
         api.reveal(id);
-        api.msg(`${id} — 기물점수 합이 ${parityIsOdd ? '홀' : '짝'}수(${s})라 폰을 소환했습니다.`);
+        api.event({ title: `${id} 발동 — 폰 소환`, body: `아군 기물 점수 합 ${s}(${parityKo}) → ${E.sqName(sq)} 에 폰을 소환했습니다.`, cls: 'mine' });
+        api.msg(`${id} — 기물점수 합이 ${parityKo}(${s})라 폰을 소환했습니다.`);
       }
     };
   }
+  // 카드에 '지금 점수 합 · 판정 상태' 를 적을 때 쓴다
+  global.parityStatus = function (G, side, id) {
+    const s = E.materialScore(G, side), odd = s % 2 === 1, want = id === 'B3a';
+    return { sum: s, odd, ok: odd === want, done: G.flags[side][id + 'Done'] || null };
+  };
   def('B3a', parityPawn(true, 'B3a'));
   def('B3b', parityPawn(false, 'B3b'));
 
@@ -706,7 +739,7 @@
     async onGain(G, side, api) {
       const n = G.augs.w.length + G.augs.b.length;
       G.augs.w = []; G.augs.b = [];
-      G.eff = G.eff.filter(e => e.kind === 'sched' ? false : false);
+      G.eff = [];                      // 강화에서 나온 효과도 전부 걷는다 (예약 포함)
       G.flags.w = {}; G.flags.b = {};
       api.msg(`Q3a — 양측의 모든 강화 ${n}개가 사라졌습니다. (이 강화 자신 포함)`);
     }
@@ -809,7 +842,8 @@
     }
   });
 
-  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 강화에서 선택지를 2개 고릅니다.'); } });
+  // 다음 드래프트에서 '그 칸' 을 한 번 더 펼친다 — 3개 중 2개다 (game.js 의 runDrafts)
+  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 드래프트에서 그 칸의 선택지 중 2개를 고릅니다.'); } });
 
 
   function grantFrom(pieces, tier, label) {

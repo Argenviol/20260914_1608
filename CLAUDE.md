@@ -11,4 +11,8 @@
 - PR 은 사용자가 따로 말할 때만 만든다.
 
 ## 답변
-- 답변은 항상 배포 주소로 끝낸다: https://unnamed-chess.onrender.com/
+- 답변은 **맨 끝 한 번만** 두 줄로 마무리한다. 중간에 또 적지 않는다.
+  이름은 `깃허브 포크` · `무제체스` 로 고정하고, **설명은 붙이지 않는다.**
+
+  > [깃허브 포크](https://github.com/Argenviol/20260914_1608/branches)
+  > [무제체스](https://unnamed-chess.onrender.com/)

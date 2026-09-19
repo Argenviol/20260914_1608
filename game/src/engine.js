@@ -113,8 +113,12 @@
   function effs(G, kind, owner) {
     return G.eff.filter(e => e.kind === kind && (owner === undefined || e.owner === owner));
   }
-  function hasEff(G, kind, owner) { return effs(G, kind, owner).length > 0; }
-  function dropEff(G, uid) { G.eff = G.eff.filter(e => e.uid !== uid); }
+  /* '있나' 만 볼 때는 목록을 만들지 않는다 — 이동 생성 한 번에 수십 번 불리는데
+     그때마다 클로저와 빈 배열이 만들어지고 바로 버려졌다. */
+  function hasEff(G, kind, owner) {
+    for (const e of G.eff) if (e.kind === kind && (owner === undefined || e.owner === owner)) return true;
+    return false;
+  }
 
   // 만료된 효과를 떼어내 반환한다. 실제 후처리는 game.js 가 expTag 로 분기한다.
   // (G 안에는 함수를 저장하지 않는다 — AI 가 JSON 복제로 탐색하기 때문)
@@ -350,11 +354,18 @@
       }
       push(i);
     }
-    // 초기 2칸 (기본 규칙)
+    /* 초기 2칸 (기본 규칙).
+       P11a(2칸씩 행동)를 가지고 있으면 위 전진 루프가 이미 이 칸을 냈다. 또 밀어 넣으면 같은 칸이
+       두 번 나오는데, 먼저 나온 쪽에는 double 표시가 없고 ui 의 tryMove 는 moves[0] 을 집는다.
+       그래서 P11a 폰이 2칸을 열어도 G.ep 가 서지 않아 앙파상이 영영 안 걸렸다.
+       이미 있으면 새로 넣지 않고 표시만 얹는다. */
     if (!G.bd[from].moved) {
       const r1 = r0 + dir, r2 = r0 + dir * 2;
       if (onBoard(r2, c0) && !G.bd[idx(r1, c0)] && !G.bd[idx(r2, c0)]) {
-        out.push(mv(from, idx(r2, c0), { double: true }));
+        const to = idx(r2, c0);
+        const dup = out.find(m => m.to === to && !m.capture && !m.promo && !m.back && !m.p1b);
+        if (dup) dup.double = true;
+        else out.push(mv(from, to, { double: true }));
       }
     }
     // P1b: 다음 1회 두 번 전진.
@@ -496,18 +507,50 @@
     }
   }
 
-  /* ───── 공격 판정 (효과 무시, 순수 기하) ───── */
+  /* ───── 공격 판정 (효과 무시, 순수 기하) ─────
+     한 수를 만들 때마다 수십 번 불린다. 안에서 배열·클로저를 만들면 그대로 쓰레기가 되므로
+     방향표와 훑기 함수는 밖에 둔다. */
+  const PAWN_DC = [-1, 1];
+  // dirs 방향으로 훑어 by 진영의 want1/want2 종류를 만나면 true. phase 는 지나칠 수 있는 기물 수.
+  function scanHit(G, r0, c0, by, dirs, want1, want2, phase) {
+    for (const [dr, dc] of dirs) {
+      let r = r0 + dr, c = c0 + dc, passed = 0;
+      while (onBoard(r, c)) {
+        const p = G.bd[idx(r, c)];
+        if (p) {
+          if (p.color === by && (p.type === want1 || p.type === want2)) return true;
+          if (passed < phase) passed++; else break;
+        }
+        r += dr; c += dc;
+      }
+    }
+    return false;
+  }
   function attacked(G, sq, by) {
-    const [r0, c0] = rc(sq);
-    // 폰
+    const r0 = sq >> 3, c0 = sq & 7;
+    /* 폰. 사거리는 genPawn 과 같은 규칙이어야 한다 — 예전에는 여기만 1칸으로 굳어 있어서
+       P11a(2칸씩 행동) 폰이 킹을 잡을 수 있는데도 체크로 안 잡혔다. */
     const dir = by === 'w' ? -1 : 1;
-    for (const dc of [-1, 1]) {
-      const r = r0 - dir, c = c0 - dc;
-      if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'p') return true; }
+    const pstep = ownsAug(G, by, 'P11a') ? 2 : 1;
+    for (let k = 1; k <= pstep; k++) {
+      for (const dc of PAWN_DC) {
+        const r = r0 - dir * k, c = c0 - dc * k;
+        if (!onBoard(r, c)) continue;
+        // 2칸짜리는 중간 칸이 비어 있어야 온다 (genPawn 의 같은 검사)
+        if (k === 2 && G.bd[idx(r0 - dir, c0 - dc)]) continue;
+        const p = G.bd[idx(r, c)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
     }
     if (ownsAug(G, by, 'P6b')) {
-      const r = r0 - dir;
-      if (onBoard(r, c0)) { const p = G.bd[idx(r, c0)]; if (p && p.color === by && p.type === 'p') return true; }
+      for (let k = 1; k <= pstep; k++) {
+        const r = r0 - dir * k;
+        if (!onBoard(r, c0)) break;
+        // 전진 루프는 첫 기물에서 멈춘다 — 중간 칸이 막혀 있으면 여기까지 못 온다
+        if (k === 2 && G.bd[idx(r0 - dir, c0)]) break;
+        const p = G.bd[idx(r, c0)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
     }
     // 나이트
     const nOff = ownsAug(G, by, 'N11b') ? N_JUMP.concat(N_JUMP2) : N_JUMP;
@@ -523,24 +566,10 @@
     // 슬라이더
     const rookPhase = ownsAug(G, by, 'R11a') ? 2 : (ownsAug(G, by, 'R1a') ? 1 : 0);
     const bishopQ = hasEff(G, 'bishopAsQueen', by);
-    const scan = (dirs, types, phase) => {
-      for (const [dr, dc] of dirs) {
-        let r = r0 + dr, c = c0 + dc, passed = 0;
-        while (onBoard(r, c)) {
-          const p = G.bd[idx(r, c)];
-          if (p) {
-            if (p.color === by && types.includes(p.type)) return true;
-            if (passed < phase) passed++; else break;
-          }
-          r += dr; c += dc;
-        }
-      }
-      return false;
-    };
-    if (scan(DIR_R, ['r'], rookPhase)) return true;
-    if (scan(DIR_R, ['q'], 0)) return true;
-    if (bishopQ && scan(DIR_R, ['b'], 0)) return true;
-    if (scan(DIR_B, ['b', 'q'], 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'r', 'r', rookPhase)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'q', 'q', 0)) return true;
+    if (bishopQ && scanHit(G, r0, c0, by, DIR_R, 'b', 'b', 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_B, 'b', 'q', 0)) return true;
     // Q6b: 퀸의 나이트 이동
     if (ownsAug(G, by, 'Q6b') && augCountFor(G, by, '퀸') >= 1) {
       for (const [dr, dc] of N_JUMP) {
@@ -570,11 +599,12 @@
     if (p.type === 'b' && G.eff.some(e => e.kind === 'bishopRoot' && e.ids.includes(p.id))) return '비숍 고정';
 
     // N3b: 나이트만 사용 가능
-    const nOnly = effs(G, 'knightOnly').length > 0;
-    if (nOnly && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
+    // (수를 하나 만들 때마다 도는 자리다 — effs() 로 목록을 만들지 않는다)
+    if (hasEff(G, 'knightOnly') && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
 
     // R6a/R6b: 기준 룩보다 위/아래로 이동 금지
-    for (const e of effs(G, 'rookLine')) {
+    for (const e of G.eff) {
+      if (e.kind !== 'rookLine') continue;
       if (e.target !== side) continue;
       const ref = e.refSq;
       if (ref === undefined || ref < 0) continue;
@@ -700,7 +730,7 @@
     FILES, VALUE, KO, KO2T, START,
     rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
-    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, dropEff, expireEffects,
+    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,
     removePiece, mutate, phaseOut, returnPhased, swapPieces, addKill, nearestEmpty,
     DIR_R, DIR_B, DIR_Q, N_JUMP, N_JUMP2, longDiagOf,

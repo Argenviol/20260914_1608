@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무제체스</title>
-<link rel="stylesheet" href="wds-tokens.css?v=1789367574">
-<link rel="stylesheet" href="style.css?v=1789367574">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="wds-tokens.css?v=1789521510">
+<link rel="stylesheet" href="style.css?v=1789521510">
 </head>
 <body>
 
@@ -33,6 +34,14 @@
             <button data-lv="normal" class="on"><b>중급</b><span>정석대로</span></button>
             <button data-lv="hard"><b>고급</b><span>진심으로</span></button>
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="ai-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn" id="h-ai">AI 대전 시작</button>
         </div>
 
@@ -48,6 +57,14 @@
             비밀 증강도 서로에게 공개됩니다.<br>
             판 뒤집기로 진영을 바꿔가며 두세요.
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="pvp-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn alt" id="h-pvp">2인 대전 시작</button>
         </div>
 
@@ -60,15 +77,14 @@
             </div>
           </div>
           <div class="onlineopt">
-            <label class="fld">제한시간
-              <select id="o-tc">
-                <option value="none">무제한</option>
-                <option value="3+2">3분 + 2초</option>
-                <option value="5+3">5분 + 3초</option>
-                <option value="10+5" selected>10분 + 5초</option>
-                <option value="20+10">20분 + 10초</option>
-              </select>
-            </label>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="o-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
             <div class="colorpick" id="o-color">
               <span class="fldlabel">내 색</span>
               <button data-c="w" title="백으로 둡니다">♙ 백</button>
@@ -91,15 +107,6 @@
     </div>
 
     <div class="homefoot">
-      <label class="fld">제한시간
-        <select id="h-tc">
-          <option value="none">무제한</option>
-          <option value="3+2">3분 + 2초</option>
-          <option value="5+3">5분 + 3초</option>
-          <option value="10+5" selected>10분 + 5초</option>
-          <option value="20+10">20분 + 10초</option>
-        </select>
-      </label>
       <label class="fld vol">
         <button class="soundbtn" id="h-sound" title="소리 켜기/끄기">🔊</button>
         <input type="range" id="h-vol" min="0" max="100" value="75">
@@ -165,6 +172,7 @@
     <div id="boardwrap">
       <div id="board"></div>
       <div id="endfx"></div>
+      <div id="oppdraft" hidden></div>
     </div>
 
     <div id="mystrip"></div>
@@ -174,6 +182,7 @@
   <aside class="col side-col">
     <div id="lastmoves"></div>
     <div id="phased"></div>
+    <div id="oppdrafttimer" hidden></div>
     <div id="actions"></div>
     <div id="tabs">
       <button data-tab="aug" class="on">증강</button>
@@ -200,15 +209,15 @@
 
 <div id="dragghost"></div>
 
-<script src="src/data.js?v=1789367574"></script>
-<script src="src/sfx.js?v=1789367574"></script>
-<script src="src/engine.js?v=1789367574"></script>
-<script src="src/augments.js?v=1789367574"></script>
-<script src="src/ai.js?v=1789367574"></script>
-<script src="src/net.js?v=1789367574"></script>
-<script src="src/stats.js?v=1789367574"></script>
-<script src="src/account.js?v=1789367574"></script>
-<script src="src/game.js?v=1789367574"></script>
-<script src="src/ui.js?v=1789367574"></script>
+<script src="src/data.js?v=1789521510"></script>
+<script src="src/sfx.js?v=1789521510"></script>
+<script src="src/engine.js?v=1789521510"></script>
+<script src="src/augments.js?v=1789521510"></script>
+<script src="src/ai.js?v=1789521510"></script>
+<script src="src/net.js?v=1789521510"></script>
+<script src="src/stats.js?v=1789521510"></script>
+<script src="src/account.js?v=1789521510"></script>
+<script src="src/game.js?v=1789521510"></script>
+<script src="src/ui.js?v=1789521510"></script>
 </body>
 </html>

@@ -241,12 +241,6 @@
   const IS_C4 = new Uint8Array(64), IS_C12 = new Uint8Array(64);
   CENTER4.forEach(i => IS_C4[i] = 1); CENTER12.forEach(i => IS_C12[i] = 1);
 
-  function phaseOf(G) {
-    let ph = 0;
-    for (let i = 0; i < 64; i++) { const p = G.bd[i]; if (p) ph += PHASE_W[p.type]; }
-    return Math.min(ph, PHASE_MAX);
-  }
-
   // 가벼운 기동성 (증강 무시, 기하학적 근사)
   function slideCount(G, i, dirs) {
     const [r0, c0] = E.rc(i);
@@ -262,18 +256,30 @@
     return n;
   }
 
-  // 한 번의 스캔으로 양측 기물 목록과 폰 파일 분포를 모은다
+  /* 한 번의 스캔으로 양측 기물 목록 · 폰 파일 분포 · 파일별 최전진 폰 · 국면 가중치를 모은다.
+     pmin/pmax 는 통과폰 판정용이다 — 예전에는 폰마다 상대 기물 전체를 훑어
+     (내 폰 8 × 상대 기물 16 = 128회 × 양쪽) 봤는데, 파일별 최전진 랭크만 있으면
+     폰마다 인접 3파일 조회로 끝난다. ph 도 여기서 같이 더한다(evaluate 가 또 돌지 않게). */
   function scan(G) {
     const P = { w: [], b: [] }, pf = { w: new Array(8).fill(0), b: new Array(8).fill(0) };
     const K = { w: -1, b: -1 };
+    const pmin = { w: new Array(8).fill(99), b: new Array(8).fill(99) };   // 랭크 번호가 가장 작은 폰
+    const pmax = { w: new Array(8).fill(-1), b: new Array(8).fill(-1) };   // 가장 큰 폰
+    let ph = 0;
     for (let i = 0; i < 64; i++) {
       const p = G.bd[i];
       if (!p) continue;
-      P[p.color].push(i);
-      if (p.type === 'p') pf[p.color][i & 7]++;
-      else if (p.type === 'k') K[p.color] = i;
+      const c = p.color, t = p.type;
+      P[c].push(i);
+      ph += PHASE_W[t];
+      if (t === 'p') {
+        const f = i & 7, r = i >> 3;
+        pf[c][f]++;
+        if (r < pmin[c][f]) pmin[c][f] = r;
+        if (r > pmax[c][f]) pmax[c][f] = r;
+      } else if (t === 'k') K[c] = i;
     }
-    return { P, pf, K };
+    return { P, pf, K, pmin, pmax, ph: Math.min(ph, PHASE_MAX) };
   }
 
   function pawnStruct(G, side, S) {
@@ -283,27 +289,32 @@
       if (files[f] > 1) s -= 14 * (files[f] - 1);
       if (files[f] && !(f > 0 && files[f - 1]) && !(f < 7 && files[f + 1])) s -= 16;
     }
-    // 통과 폰: 앞쪽 3파일에 적 폰이 없으면
+    /* 통과 폰: 앞쪽 3파일에 나보다 앞선 적 폰이 없으면.
+       '앞' 은 백이면 랭크 번호가 작은 쪽이라 상대 폰의 최소 랭크(pmin)만 보면 되고,
+       흑이면 최대 랭크(pmax)만 보면 된다. */
+    const white = side === 'w';
+    const front = white ? S.pmin[foe] : S.pmax[foe];
     for (const i of S.P[side]) {
       if (G.bd[i].type !== 'p') continue;
-      const f = FILE_OF(i), r = RANK_OF(i);
+      const f = i & 7, r = i >> 3;
       let blocked = false;
-      for (const j of S.P[foe]) {
-        if (G.bd[j].type !== 'p') continue;
-        const jf = FILE_OF(j), jr = RANK_OF(j);
-        if (Math.abs(jf - f) > 1) continue;
-        if (side === 'w' ? jr < r : jr > r) { blocked = true; break; }
+      for (let jf = f - 1; jf <= f + 1; jf++) {
+        if (jf < 0 || jf > 7) continue;
+        const fr = front[jf];
+        if (white ? fr < r : fr > r) { blocked = true; break; }
       }
-      if (!blocked) { const adv = side === 'w' ? (6 - r) : (r - 1); s += 12 + adv * adv * 3; }
+      if (!blocked) { const adv = white ? (6 - r) : (r - 1); s += 12 + adv * adv * 3; }
     }
     return s;
   }
 
   // 킹 안전: 폰 방패 + 근처의 적 기물 무게 (attacked() 없이 근사)
+  // 가중치 표는 밖에 둔다 — 안에 두면 초당 10만 번 새 객체가 만들어진다
+  const KS_W = { q: 5, r: 3, b: 2, n: 2, p: 1, k: 0 };
   function kingSafety(G, side, ph, S) {
     const k = S.K[side];
     if (k < 0) return 0;
-    const [kr, kc] = E.rc(k);
+    const kr = k >> 3, kc = k & 7;
     const dir = side === 'w' ? -1 : 1;
     let shield = 0;
     for (let dc = -1; dc <= 1; dc++) {
@@ -317,13 +328,13 @@
       }
     }
     let danger = 0;
-    const W = { q: 5, r: 3, b: 2, n: 2, p: 1, k: 0 };
     for (const j of S.P[E.other(side)]) {
-      const p = G.bd[j];
-      const [r, c] = E.rc(j);
-      const d = Math.max(Math.abs(r - kr), Math.abs(c - kc));
-      if (d <= 2) danger += W[p.type] * (3 - d);
-      else if (d === 3 && (p.type === 'q' || p.type === 'r')) danger += 1;
+      const t = G.bd[j].type;
+      const dr = (j >> 3) - kr, dc2 = (j & 7) - kc;
+      const ar = dr < 0 ? -dr : dr, ac = dc2 < 0 ? -dc2 : dc2;
+      const d = ar > ac ? ar : ac;
+      if (d <= 2) danger += KS_W[t] * (3 - d);
+      else if (d === 3 && (t === 'q' || t === 'r')) danger += 1;
     }
     const f = ph / PHASE_MAX;
     return Math.round(shield * f) - Math.round(danger * danger * 1.2 * f);
@@ -411,22 +422,17 @@
 
   function evaluate(G, side) {
     const S = scan(G);
-    let ph = 0;
-    for (const c of ['w', 'b']) for (const i of S.P[c]) ph += PHASE_W[G.bd[i].type];
-    ph = Math.min(ph, PHASE_MAX);
+    const ph = S.ph;                       // scan 이 같은 순회에서 이미 더해 뒀다
     const foe = E.other(side);
     return (sideScore(G, side, ph, S) - sideScore(G, foe, ph, S))
       + (augScore(G, side) - augScore(G, foe));
   }
 
   /* ═══════════ 탐색 ═══════════ */
+  // allLegal · allLegalRelaxed 이 안에서 G.turn 을 넣었다 되돌린다. 밖에서 또 감쌀 필요가 없다.
   function movesFor(G, side) {
-    const save = G.turn;
-    G.turn = side;
-    let ms = E.allLegal(G, side);
-    if (!ms.length) ms = E.allLegalRelaxed(G, side).moves;
-    G.turn = save;
-    return ms;
+    const ms = E.allLegal(G, side);
+    return ms.length ? ms : E.allLegalRelaxed(G, side).moves;
   }
 
   // Zobrist
@@ -505,9 +511,7 @@
     if (stand > alpha) alpha = stand;
     if (ply > 6) return alpha;
 
-    const save = G.turn; G.turn = side;
     const caps = E.allLegal(G, side, true).filter(m => m.promo === undefined || m.promo === 'q');
-    G.turn = save;
     orderMoves(G, caps, null, 0);
     for (const m of caps) {
       // 델타 가지치기 — 잡는 기물 값을 통째로 얹어도 알파에 못 미치면 볼 필요가 없다.
@@ -527,19 +531,13 @@
   const MATE = 90000;
 
   // 이 진영이 킹·폰 말고 다른 기물을 갖고 있는가 (널무브 안전장치)
+  // piecesOf 로 목록을 만들지 않는다 — 첫 기물에서 끝날 일이다
   function hasHeavy(G, side) {
-    for (const i of E.piecesOf(G, side)) {
-      const t = G.bd[i].type;
-      if (t !== 'p' && t !== 'k') return true;
+    for (let i = 0; i < 64; i++) {
+      const p = G.bd[i];
+      if (p && p.color === side && p.type !== 'p' && p.type !== 'k') return true;
     }
     return false;
-  }
-
-  function inCheckFor(G, side) {
-    const save = G.turn; G.turn = side;
-    const c = E.inCheck(G, side);
-    G.turn = save;
-    return c;
   }
 
   function negamax(G, side, depth, alpha, beta, ply, key) {
@@ -566,7 +564,7 @@
 
     if (depth <= 0) return quiesce(G, side, alpha, beta, 0);
 
-    const inChk = inCheckFor(G, side);
+    const inChk = E.inCheck(G, side);          // inCheck 는 G.turn 을 보지 않는다
 
     /* 널무브 — 한 수를 그냥 넘겨 주고도 여전히 beta 를 넘으면,
        이 가지는 상대에게 아무 희망이 없다고 보고 얕게 끊는다.
@@ -588,13 +586,19 @@
 
     const alpha0 = alpha;
     let best = -Infinity, bestMove = null;
+    /* 체크연장 판정에 쓸 상대 킹 자리. 이 루프에서 움직이는 건 내 기물뿐이라
+       (캐슬링도 내 룩만 따라 움직인다) 수마다 64칸을 다시 훑을 필요가 없다. */
+    const foeSide = E.other(side);
+    const foeK = E.findKing(G, foeSide);
     for (let i = 0; i < ms.length; i++) {
       const m = ms[i];
       const quiet = !G.bd[m.to];
       const u = E.applyRaw(G, m);
       const ck = hashAfter(key, G, m, u, side);
       // 체크를 거는 수는 한 수 더 본다. 전술은 거의 여기서 나온다.
-      const ext = inCheckFor(G, E.other(side)) ? 1 : 0;
+      // 내 수가 상대 킹을 잡아 버린 경우(유사수)에는 그 자리에 내 기물이 서 있으므로 연장하지 않는다
+      const fk = foeK >= 0 ? G.bd[foeK] : null;
+      const ext = (fk && fk.type === 'k' && fk.color === foeSide && E.attacked(G, foeK, side)) ? 1 : 0;
       const nd = depth - 1 + ext;
       let sc;
       if (i === 0) sc = -negamax(G, E.other(side), nd, -beta, -alpha, ply + 1, ck);
@@ -778,6 +782,6 @@
     return a.slice(0, picks).map(x => x.id);
   }
 
-  const AI = { pick, evaluate, draftPick, LEVELS, levelOf, lastInfo: null, BOOK_SIZE: BOOK_LINES.length };
+  const AI = { pick, evaluate, draftPick, LEVELS, levelOf, lastInfo: null };
   global.AI = AI;
 })(window);
