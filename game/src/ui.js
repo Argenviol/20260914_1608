@@ -41,10 +41,8 @@
   let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
   let chatUnread = 0;
   let pathTimer = null;
-  let modalDepth = 0;
   let pauseDepth = 0;                 // 시계를 멈추는 모달의 수 (도감·규칙·계정 창은 세지 않는다)
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
-  let lowTimeWarned = { w: false, b: false };
 
   /* ───────── 용어 강조 ─────────
      증강 문구 안의 용어와 아래 #태그를 같은 색으로 칠한다. */
@@ -216,6 +214,26 @@
     const pmOk = canPremove();
     const pmSide = pmOk ? premoveSide() : null;
 
+    /* 칸마다 후보 배열을 처음부터 훑으면 64칸 × 후보 수만큼 비교가 돈다.
+       한 번만 Set 으로 만들어 두고 64번 조회한다. 효과·체크도 마찬가지로 미리 한 번만 센다. */
+    const destSet = new Set(dests);
+    const peekSet = peek ? new Set(peek.dests) : null;
+    const pickSet = pending ? new Set(pending.squares) : null;
+    const pmSet = pmOk ? new Set(pmDests) : null;
+    const chk = { w: E.inCheck(g, 'w'), b: E.inCheck(g, 'b') };
+    // 지정불가 남은 수 · 비숍 고정을 기물 id 로 한 번에 모은다 (기물마다 G.eff 를 훑지 않게)
+    const lockRemain = new Map(), rooted = new Set();
+    for (const e of g.eff) {
+      if (e.kind === 'untargetable' && e.ids) {
+        for (const id of e.ids) {
+          const r = Math.max(0, e.until - g.ply);
+          if (!lockRemain.has(id) || r > lockRemain.get(id)) lockRemain.set(id, r);
+        }
+      } else if (e.kind === 'bishopRoot' && e.ids) {
+        for (const id of e.ids) rooted.add(id);
+      }
+    }
+
     for (const i of order) {
       const [r, c] = E.rc(i);
       const sq = el('div', 'sq ' + (E.lightSquare(i) ? 'light' : 'dark'));
@@ -227,18 +245,18 @@
       const lm = g.lastBySide[E.other(g.turn)] || g.lastBySide[g.turn];
       if (lm && (lm.from === i || lm.to === i)) sq.classList.add('last');
       if (i === sel) sq.classList.add('sel');
-      if (dests.includes(i)) sq.classList.add(g.bd[i] ? 'capture' : 'dest');
+      if (destSet.has(i)) sq.classList.add(g.bd[i] ? 'capture' : 'dest');
       // 살펴보기 — 두는 게 아니라 사거리만 보는 중이라 다른 색으로 구분한다
       if (peek) {
         if (i === peek.from) sq.classList.add('peekfrom');
-        else if (peek.dests.includes(i)) sq.classList.add(g.bd[i] ? 'peekcap' : 'peek');
+        else if (peekSet.has(i)) sq.classList.add(g.bd[i] ? 'peekcap' : 'peek');
       }
-      if (pending && pending.squares.includes(i)) sq.classList.add('pick');
+      if (pickSet && pickSet.has(i)) sq.classList.add('pick');
       if (flashSquares.has(i)) sq.classList.add('flash');
       // 수 예약 — 고르는 중인 기물과 갈 곳, 그리고 이미 예약한 수
       if (pmOk) {
         if (i === pmFrom) sq.classList.add('pmsel');
-        else if (pmDests.includes(i)) sq.classList.add(g.bd[i] ? 'pmcap' : 'pmdest');
+        else if (pmSet.has(i)) sq.classList.add(g.bd[i] ? 'pmcap' : 'pmdest');
         if (premove && (i === premove.from || i === premove.to)) sq.classList.add('premove');
       }
 
@@ -256,17 +274,17 @@
       const p = g.bd[i];
       if (p) {
         const pe = el('div', 'pc ' + (p.color === 'w' ? 'wp' : 'bp'), GLYPH[p.type]);
-        if (p.type === 'k' && E.inCheck(g, p.color) && !g.result) sq.classList.add('incheck');
+        if (p.type === 'k' && chk[p.color] && !g.result) sq.classList.add('incheck');
         if ((human && p.color === g.turn) || (pmOk && p.color === pmSide)) pe.classList.add('grab');
         if (drag && drag.from === i) pe.classList.add('dragging');
-        const ur = Game().untargetableRemain(p.id);
+        const ur = lockRemain.has(p.id) ? lockRemain.get(p.id) : null;
         if (ur !== null) {
           pe.classList.add('untouchable');
           const b = el('span', 'badge lock', String(ur));
           b.title = `지정불가 — ${ur}수 뒤 해제. 체크를 벗어나는 수는 예외로 움직일 수 있습니다.`;
           sq.appendChild(b);
         }
-        if (g.eff.some(e => e.kind === 'bishopRoot' && e.ids.includes(p.id))) pe.classList.add('rooted');
+        if (rooted.has(p.id)) pe.classList.add('rooted');
         sq.appendChild(pe);
       }
       if ((flip ? c === 7 : c === 0)) sq.appendChild(el('span', 'coord rank', String(8 - r)));
@@ -1063,7 +1081,10 @@
     }
     if (!items.length) wrap.appendChild(el('div', 'dim', '아직 기록이 없습니다'));
     box.appendChild(wrap);
-    wrap.scrollTop = wrap.scrollHeight;
+    /* 방금 줄을 수백 개 꽂아 놓고 바로 scrollHeight 를 읽으면 그 자리에서 레이아웃이 강제로 돈다.
+       한 수마다 그 값을 물어봤더니 기록 탭만 유독 느렸다. 다음 프레임으로 미루면 같은 자리에 붙으면서
+       그리는 동안은 레이아웃을 건드리지 않는다. */
+    requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
   }
 
   function renderLog() { if (tab === 'log') renderTabPanel(); }
@@ -1158,14 +1179,12 @@
        예전에는 모든 창이 시계를 멈춰서, 상대 차례에 도감을 열어 두면 상대 시간이
        공짜로 서고 내 화면에는 '증강을 고르는 중' 이라고 떴다. */
     const pauses = !(opts && opts.keepClock);
-    modalDepth++;
     if (pauses) { pauseDepth++; Game().pauseClock(); }
     let closed = false;
     const close = () => {
       if (closed) return;
       closed = true;
-      ov.remove(); modalDepth--;
-      if (modalDepth < 0) modalDepth = 0;
+      ov.remove();
       if (pauses) { pauseDepth--; if (pauseDepth <= 0) { pauseDepth = 0; Game().resumeClock(); } }
     };
     close.el = ov;                 // 호출부에서 오버레이 자체가 필요할 때가 있다

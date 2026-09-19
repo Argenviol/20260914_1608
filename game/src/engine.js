@@ -113,8 +113,12 @@
   function effs(G, kind, owner) {
     return G.eff.filter(e => e.kind === kind && (owner === undefined || e.owner === owner));
   }
-  function hasEff(G, kind, owner) { return effs(G, kind, owner).length > 0; }
-  function dropEff(G, uid) { G.eff = G.eff.filter(e => e.uid !== uid); }
+  /* '있나' 만 볼 때는 목록을 만들지 않는다 — 이동 생성 한 번에 수십 번 불리는데
+     그때마다 클로저와 빈 배열이 만들어지고 바로 버려졌다. */
+  function hasEff(G, kind, owner) {
+    for (const e of G.eff) if (e.kind === kind && (owner === undefined || e.owner === owner)) return true;
+    return false;
+  }
 
   // 만료된 효과를 떼어내 반환한다. 실제 후처리는 game.js 가 expTag 로 분기한다.
   // (G 안에는 함수를 저장하지 않는다 — AI 가 JSON 복제로 탐색하기 때문)
@@ -496,12 +500,30 @@
     }
   }
 
-  /* ───── 공격 판정 (효과 무시, 순수 기하) ───── */
+  /* ───── 공격 판정 (효과 무시, 순수 기하) ─────
+     한 수를 만들 때마다 수십 번 불린다. 안에서 배열·클로저를 만들면 그대로 쓰레기가 되므로
+     방향표와 훑기 함수는 밖에 둔다. */
+  const PAWN_DC = [-1, 1];
+  // dirs 방향으로 훑어 by 진영의 want1/want2 종류를 만나면 true. phase 는 지나칠 수 있는 기물 수.
+  function scanHit(G, r0, c0, by, dirs, want1, want2, phase) {
+    for (const [dr, dc] of dirs) {
+      let r = r0 + dr, c = c0 + dc, passed = 0;
+      while (onBoard(r, c)) {
+        const p = G.bd[idx(r, c)];
+        if (p) {
+          if (p.color === by && (p.type === want1 || p.type === want2)) return true;
+          if (passed < phase) passed++; else break;
+        }
+        r += dr; c += dc;
+      }
+    }
+    return false;
+  }
   function attacked(G, sq, by) {
-    const [r0, c0] = rc(sq);
+    const r0 = sq >> 3, c0 = sq & 7;
     // 폰
     const dir = by === 'w' ? -1 : 1;
-    for (const dc of [-1, 1]) {
+    for (const dc of PAWN_DC) {
       const r = r0 - dir, c = c0 - dc;
       if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'p') return true; }
     }
@@ -523,24 +545,10 @@
     // 슬라이더
     const rookPhase = ownsAug(G, by, 'R11a') ? 2 : (ownsAug(G, by, 'R1a') ? 1 : 0);
     const bishopQ = hasEff(G, 'bishopAsQueen', by);
-    const scan = (dirs, types, phase) => {
-      for (const [dr, dc] of dirs) {
-        let r = r0 + dr, c = c0 + dc, passed = 0;
-        while (onBoard(r, c)) {
-          const p = G.bd[idx(r, c)];
-          if (p) {
-            if (p.color === by && types.includes(p.type)) return true;
-            if (passed < phase) passed++; else break;
-          }
-          r += dr; c += dc;
-        }
-      }
-      return false;
-    };
-    if (scan(DIR_R, ['r'], rookPhase)) return true;
-    if (scan(DIR_R, ['q'], 0)) return true;
-    if (bishopQ && scan(DIR_R, ['b'], 0)) return true;
-    if (scan(DIR_B, ['b', 'q'], 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'r', 'r', rookPhase)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'q', 'q', 0)) return true;
+    if (bishopQ && scanHit(G, r0, c0, by, DIR_R, 'b', 'b', 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_B, 'b', 'q', 0)) return true;
     // Q6b: 퀸의 나이트 이동
     if (ownsAug(G, by, 'Q6b') && augCountFor(G, by, '퀸') >= 1) {
       for (const [dr, dc] of N_JUMP) {
@@ -570,11 +578,12 @@
     if (p.type === 'b' && G.eff.some(e => e.kind === 'bishopRoot' && e.ids.includes(p.id))) return '비숍 고정';
 
     // N3b: 나이트만 사용 가능
-    const nOnly = effs(G, 'knightOnly').length > 0;
-    if (nOnly && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
+    // (수를 하나 만들 때마다 도는 자리다 — effs() 로 목록을 만들지 않는다)
+    if (hasEff(G, 'knightOnly') && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
 
     // R6a/R6b: 기준 룩보다 위/아래로 이동 금지
-    for (const e of effs(G, 'rookLine')) {
+    for (const e of G.eff) {
+      if (e.kind !== 'rookLine') continue;
       if (e.target !== side) continue;
       const ref = e.refSq;
       if (ref === undefined || ref < 0) continue;
@@ -700,7 +709,7 @@
     FILES, VALUE, KO, KO2T, START,
     rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
-    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, dropEff, expireEffects,
+    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, expireEffects,
     untouchable, immune, ownsAug, augCountFor, protectedPiece,
     removePiece, mutate, phaseOut, returnPhased, swapPieces, addKill, nearestEmpty,
     DIR_R, DIR_B, DIR_Q, N_JUMP, N_JUMP2, longDiagOf,

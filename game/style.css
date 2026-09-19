@@ -740,43 +740,6 @@ body.myturn #boardwrap::after {
 .cbody { font-size: var(--wds-body2-size); line-height: 1.6; margin-top: var(--wds-space-10); color: var(--wds-label-neutral); }
 .centercard .termtags { justify-content: center; }
 
-/* ═══════════════ 진행 기록 ═══════════════ */
-#logpanel {
-  position: fixed; right: var(--wds-space-16); top: 108px; z-index: 40;
-  width: min(360px, 32vw);
-  background: var(--wds-background-elevated-normal);
-  border: 1px solid var(--wds-line-normal-normal);
-  border-radius: var(--wds-radius-12);
-  box-shadow: var(--wds-shadow-large);
-  display: none; flex-direction: column; max-height: calc(100vh - 150px);
-}
-#logpanel.show { display: flex; }
-.logtop {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: var(--wds-space-10) var(--wds-space-12);
-  border-bottom: 1px solid var(--wds-line-normal-alternative);
-  font-size: var(--wds-label1-size); font-weight: 700;
-}
-.logx {
-  background: transparent; border: 1px solid var(--wds-line-normal-normal);
-  color: var(--wds-label-alternative); border-radius: var(--wds-radius-6);
-  padding: var(--wds-space-2) var(--wds-space-10); font-size: var(--wds-label2-size);
-}
-.logx:hover { color: var(--wds-label-normal); border-color: var(--wds-primary-normal); }
-#log {
-  flex: 1 1 auto; min-height: 0; overflow: auto;
-  background: var(--wds-background-normal-alternative);
-  border-radius: 0 0 var(--wds-radius-12) var(--wds-radius-12);
-  padding: var(--wds-space-8) var(--wds-space-12);
-  font-size: var(--wds-label1-size); line-height: 1.65;
-}
-#log .line { color: var(--wds-label-alternative); border-bottom: 1px solid var(--wds-line-normal-alternative); padding: 2px 0; }
-#log .line.cap { color: var(--wds-status-negative); }
-#log .line.aug { color: var(--wds-status-cautionary); }
-#log .line.gain { color: var(--wds-primary-normal); }
-#log .line.chk { color: var(--wds-status-negative); font-weight: 700; }
-#log .line:last-child { color: var(--wds-label-normal); }
-
 /* ═══════════════ 모달 ═══════════════ */
 .overlay {
   position: fixed; inset: 0; background: var(--wds-material-dimmer);

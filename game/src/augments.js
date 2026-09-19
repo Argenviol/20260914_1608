@@ -727,7 +727,7 @@
     async onGain(G, side, api) {
       const n = G.augs.w.length + G.augs.b.length;
       G.augs.w = []; G.augs.b = [];
-      G.eff = G.eff.filter(e => e.kind === 'sched' ? false : false);
+      G.eff = [];                      // 강화에서 나온 효과도 전부 걷는다 (예약 포함)
       G.flags.w = {}; G.flags.b = {};
       api.msg(`Q3a — 양측의 모든 강화 ${n}개가 사라졌습니다. (이 강화 자신 포함)`);
     }

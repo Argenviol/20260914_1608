@@ -645,17 +645,6 @@
     return out.sort((a, b) => a.remain - b.remain);
   };
 
-  // 특정 기물에 걸린 지정불가의 남은 수 (보드 배지용)
-  Game.untargetableRemain = function (pieceId) {
-    let best = null;
-    for (const e of Game.G.eff) {
-      if (e.kind !== 'untargetable' || !e.ids.includes(pieceId)) continue;
-      const r = Math.max(0, e.until - Game.G.ply);
-      if (best === null || r > best) best = r;
-    }
-    return best;
-  };
-
   /* ───────── 수동 발동 (횟수제한 증강) ───────── */
   Game.activatable = function (side) {
     return Game.G.augs[side].filter(id => {
@@ -756,10 +745,6 @@
   // 이 자리에서 사람이 조작하는 진영인가
   Game.isHuman = function (side) {
     return !(Game.mode === 'ai' && side === Game.aiSide);
-  };
-  Game.humanSide = function () {
-    if (Game.mode === 'online') return Game.mySide;
-    return Game.mode === 'ai' ? opp(Game.aiSide) : Game.G.turn;
   };
   // 이 화면에서 지금 둘 수 있는가 (온라인이면 내 차례일 때만)
   Game.myTurn = function () {
