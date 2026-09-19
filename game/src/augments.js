@@ -26,8 +26,20 @@
   function sched(G, side, tag, fireAt, data) {
     return E.addEff(G, Object.assign({ kind: 'sched', owner: side, tag, fireAt }, data || {}));
   }
+  /* R3c 룩은 '제거 · 포영 · 교환 · 지정불가' 에 면역이다.
+     앞의 셋은 engine 의 removePiece · phaseOut · swapPieces 가 각각 막고 있었는데
+     지정불가만 빠져 있어서, 카드 문구에는 있는 면역이 실제로는 안 걸렸다. 여기서 한 번에 거른다. */
   function untarget(G, side, ids, until) {
-    return E.addEff(G, { kind: 'untargetable', owner: side, ids: ids.filter(Boolean), until });
+    const keep = ids.filter(id => {
+      if (!id) return false;
+      for (let i = 0; i < 64; i++) {
+        const p = G.bd[i];
+        if (p && p.id === id) return !E.immune(G, p);
+      }
+      return true;                       // 판에 없는 기물(포영 중 등)은 그대로 둔다
+    });
+    if (!keep.length) return null;
+    return E.addEff(G, { kind: 'untargetable', owner: side, ids: keep, until });
   }
   function adj(i, includeDiag) {
     const [r, c] = rc(i), out = [];

@@ -199,5 +199,74 @@ function movesOf(G, from) {
   check('포영 · R3c 룩은 면역이다', E.phaseOut(H, sq('d5'), H.ply + 2), false);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   P11a — "모든 폰이 한 번에 두 칸까지 움직이고 처치할 수 있습니다"
+
+   이동 생성(genPawn)에만 들어가 있고 공격 판정(attacked)에는 빠져 있어서,
+   P11a 폰이 킹을 잡을 수 있는데도 체크로 안 잡혔다. 체크메이트·스테일메이트까지 틀어진다.
+   또 전진 루프와 '초기 2칸' 규칙이 같은 칸을 두 번 내면서, 먼저 나온 쪽에 double 표시가 없어
+   ui 가 그걸 집는 바람에 앙파상이 영영 안 걸렸다.
+   ───────────────────────────────────────────────────────────── */
+{
+  const G = board('5k2/8/8/8/3P4/8/8/4K3', { moved: true });
+  G.augs.w.push('P11a');
+  check('P11a · 폰이 두 칸 대각까지 잡는다',
+    E.legalMoves(G, sq('d4')).filter(m => m.capture).map(m => name(m.to)), []);
+
+  const H = board('5k2/8/5K2/8/3P4/8/8/8', { moved: true });   // f6 에 흑 킹, d4 백 폰
+  H.bd[sq('f6')] = E.mkPiece('k', 'b');
+  H.bd[sq('e1')] = E.mkPiece('k', 'w');
+  H.bd[sq('f8')] = null;
+  H.augs.w.push('P11a');
+  check('P11a · 두 칸 대각에 있는 킹을 잡을 수 있다',
+    E.legalMoves(H, sq('d4')).some(m => m.to === sq('f6') && m.capture), true);
+  check('P11a · 그 칸을 공격 중이라고 본다', E.attacked(H, sq('f6'), 'w'), true);
+  H.turn = 'b';
+  check('P11a · 그래서 체크가 잡힌다', E.inCheck(H, 'b'), true);
+
+  /* 중간 칸이 막혀 있으면 두 칸 대각은 못 온다 (생성 쪽과 같은 규칙).
+     막는 기물은 f6 를 직접 때리지 않는 것으로 골라야 한다 — e5 에 폰을 두면
+     그 폰이 한 칸 대각으로 f6 를 때려서 검사가 무의미해진다. 나이트는 f6 에 안 닿는다. */
+  const I = board('5k2/8/5K2/4N3/3P4/8/8/8', { moved: true });
+  I.bd[sq('f6')] = E.mkPiece('k', 'b');
+  I.bd[sq('e1')] = E.mkPiece('k', 'w');
+  I.bd[sq('f8')] = null;
+  I.augs.w.push('P11a');
+  check('P11a · 중간 칸이 막히면 공격이 아니다', E.attacked(I, sq('f6'), 'w'), false);
+}
+
+/* 같은 칸이 두 번 나오지 않고, 초기 2칸에는 double 표시가 붙는다 */
+{
+  const G = board('4k3/8/8/8/8/8/3P4/4K3', { moved: false });
+  G.augs.w.push('P11a');
+  const fwd = E.legalMoves(G, sq('d2')).filter(m => !m.capture);
+  check('P11a · 기본 배치 폰의 전진은 d3 · d4 둘뿐', fwd.map(m => name(m.to)).sort(), ['d3', 'd4']);
+  check('P11a · 2칸 전진에 double 이 붙는다',
+    fwd.filter(m => m.to === sq('d4')).map(m => !!m.double), [true]);
+
+  // 증강이 없을 때와 같은 모양인지도 함께
+  const H = board('4k3/8/8/8/8/8/3P4/4K3', { moved: false });
+  const hf = E.legalMoves(H, sq('d2')).filter(m => !m.capture);
+  check('증강 없음 · 전진은 d3 · d4, 2칸에 double',
+    [hf.map(m => name(m.to)).sort(), hf.filter(m => m.to === sq('d4')).map(m => !!m.double)],
+    [['d3', 'd4'], [true]]);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   R3c — "룩이 제거, 포영, 교환, 지정불가 효과에 면역이 됩니다"
+   제거·포영·교환은 engine 이 막고 있었는데 지정불가만 빠져 있었다.
+   ───────────────────────────────────────────────────────────── */
+{
+  const G = board('4k3/8/8/3r4/8/8/8/4K3');
+  const r = G.bd[sq('d5')];
+  G.augs.b.push('R3c');
+  check('R3c · 제거 면역', E.removePiece(G, sq('d5')), false);
+  check('R3c · 포영 면역', E.phaseOut(G, sq('d5'), G.ply + 2), false);
+  check('R3c · 변이 면역', E.mutate(G, sq('d5'), 'q'), false);
+  // 지정불가는 augments.js 의 untarget 이 거른다 — 엔진 쪽 판정만 여기서 잠가 둔다
+  check('R3c · immune 이 룩을 가려낸다', E.immune(G, r), true);
+  check('R3c · 룩이 아니면 면역이 아니다', E.immune(G, E.mkPiece('n', 'b')), false);
+}
+
 console.log('\n' + pass + ' pass, ' + fails.length + ' fail' + (fails.length ? ': ' + fails.join(' / ') : ''));
 process.exit(fails.length ? 1 : 0);

@@ -88,6 +88,12 @@ const H = require('./harness');
     { id: 'R1a', fen: '4k3/8/8/8/8/8/R1p5/4K3', pre: 'Game.G.bd[T.sq("b2")] = Engine.mkPiece("p","w")', ok: 'T.legal("a2").includes("c2")' },
     { id: 'R1b', fen: '4k3/8/8/8/8/8/R1p1p3/4K3', ok: 'T.at("c2") === null && T.at("e2") === null' },
     { id: 'R1c', fen: '4k3/8/8/8/8/8/R2p4/4K3', act: 'await T.play("a2","d2")', ok: 'T.effs().includes("untargetable")' },
+    /* R3c 룩은 '제거 · 포영 · 교환 · 지정불가' 에 면역이다. 지정불가만 구현이 빠져 있었다.
+       R1c 는 처치한 룩과 지정한 상대 기물을 함께 지정불가로 만드는데, 그 룩이 R3c 면 룩은 빠져야 한다. */
+    { id: 'R1c', fen: '4k2n/8/8/8/8/8/R2p4/4K3', act: 'await T.play("a2","d2")',
+      ok: '(() => { const rid = Game.G.bd[T.sq("d2")].id; const e = Game.G.eff.filter(x => x.kind === "untargetable"); return e.length === 1 && e[0].ids.includes(rid); })()' },
+    { id: 'R1c', fen: '4k2n/8/8/8/8/8/R2p4/4K3', pre: 'Game.G.augs.w.push("R3c")', act: 'await T.play("a2","d2")',
+      ok: '(() => { const rid = Game.G.bd[T.sq("d2")].id; const e = Game.G.eff.filter(x => x.kind === "untargetable"); return e.length === 1 && !e[0].ids.includes(rid) && e[0].ids.length === 1; })()' },
     { id: 'R3a', fen: '4k3/8/8/8/8/8/R3P3/4K3', ok: 'T.legal("e2").includes("h2")' },
     { id: 'R3b', fen: '4k3/8/n7/8/8/8/R2n4/4K3', act: 'await T.play("a2","d2")', ok: 'Game.G.phased.length === 1 && T.at("a6") === null' },
     { id: 'R3c', fen: '4k3/8/8/8/8/8/R7/4K3', ok: 'Engine.removePiece(Game.G, T.sq("a2")) === false' },

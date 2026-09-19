@@ -5,7 +5,7 @@
 `engine.js` 는 규칙만 본다. 브라우저도 중계 서버도 없이 바로 돈다.
 
 ```
-node tools/test/engine.js   # 규칙 회귀 — P1b 폰 전진 거리 · 지정불가 · 포영 (28항목)
+node tools/test/engine.js   # 규칙 회귀 — 폰 전진 거리 · 지정불가 · 포영 · P11a · R3c 면역 (41항목)
 node tools/test/ai.js       # 평가·탐색 최적화 회귀 (5항목)
 ```
 
@@ -20,7 +20,7 @@ node tools/test/ai.js       # 평가·탐색 최적화 회귀 (5항목)
 python server/relay.py                 # 8788
 cd tools/test && npm i playwright-core  # 한 번만
 node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 동기화 (26항목)
-node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (77 시나리오)
+node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (79 시나리오)
 node feedback.js    # 피드백 항목을 실제 화면에서 — 칸을 눌러 두고 카드를 눌러 고른다 (48항목)
 ```
 

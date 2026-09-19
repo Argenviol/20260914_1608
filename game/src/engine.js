@@ -354,11 +354,18 @@
       }
       push(i);
     }
-    // 초기 2칸 (기본 규칙)
+    /* 초기 2칸 (기본 규칙).
+       P11a(2칸씩 행동)를 가지고 있으면 위 전진 루프가 이미 이 칸을 냈다. 또 밀어 넣으면 같은 칸이
+       두 번 나오는데, 먼저 나온 쪽에는 double 표시가 없고 ui 의 tryMove 는 moves[0] 을 집는다.
+       그래서 P11a 폰이 2칸을 열어도 G.ep 가 서지 않아 앙파상이 영영 안 걸렸다.
+       이미 있으면 새로 넣지 않고 표시만 얹는다. */
     if (!G.bd[from].moved) {
       const r1 = r0 + dir, r2 = r0 + dir * 2;
       if (onBoard(r2, c0) && !G.bd[idx(r1, c0)] && !G.bd[idx(r2, c0)]) {
-        out.push(mv(from, idx(r2, c0), { double: true }));
+        const to = idx(r2, c0);
+        const dup = out.find(m => m.to === to && !m.capture && !m.promo && !m.back && !m.p1b);
+        if (dup) dup.double = true;
+        else out.push(mv(from, to, { double: true }));
       }
     }
     // P1b: 다음 1회 두 번 전진.
@@ -521,15 +528,29 @@
   }
   function attacked(G, sq, by) {
     const r0 = sq >> 3, c0 = sq & 7;
-    // 폰
+    /* 폰. 사거리는 genPawn 과 같은 규칙이어야 한다 — 예전에는 여기만 1칸으로 굳어 있어서
+       P11a(2칸씩 행동) 폰이 킹을 잡을 수 있는데도 체크로 안 잡혔다. */
     const dir = by === 'w' ? -1 : 1;
-    for (const dc of PAWN_DC) {
-      const r = r0 - dir, c = c0 - dc;
-      if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'p') return true; }
+    const pstep = ownsAug(G, by, 'P11a') ? 2 : 1;
+    for (let k = 1; k <= pstep; k++) {
+      for (const dc of PAWN_DC) {
+        const r = r0 - dir * k, c = c0 - dc * k;
+        if (!onBoard(r, c)) continue;
+        // 2칸짜리는 중간 칸이 비어 있어야 온다 (genPawn 의 같은 검사)
+        if (k === 2 && G.bd[idx(r0 - dir, c0 - dc)]) continue;
+        const p = G.bd[idx(r, c)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
     }
     if (ownsAug(G, by, 'P6b')) {
-      const r = r0 - dir;
-      if (onBoard(r, c0)) { const p = G.bd[idx(r, c0)]; if (p && p.color === by && p.type === 'p') return true; }
+      for (let k = 1; k <= pstep; k++) {
+        const r = r0 - dir * k;
+        if (!onBoard(r, c0)) break;
+        // 전진 루프는 첫 기물에서 멈춘다 — 중간 칸이 막혀 있으면 여기까지 못 온다
+        if (k === 2 && G.bd[idx(r0 - dir, c0)]) break;
+        const p = G.bd[idx(r, c0)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
     }
     // 나이트
     const nOff = ownsAug(G, by, 'N11b') ? N_JUMP.concat(N_JUMP2) : N_JUMP;
