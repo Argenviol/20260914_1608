@@ -1820,10 +1820,10 @@
     const bar = el('div', 'codexbar');
     const pieceRow = el('div', 'segrow');
     pieceRow.appendChild(el('span', 'seglabel', '기물'));
-    const pieceBox = el('span'); pieceRow.appendChild(pieceBox);
+    const pieceBox = el('span', 'segbox'); pieceRow.appendChild(pieceBox);
     const tierRow = el('div', 'segrow');
     tierRow.appendChild(el('span', 'seglabel', '처치 수'));
-    const tierBox = el('span'); tierRow.appendChild(tierBox);
+    const tierBox = el('span', 'segbox'); tierRow.appendChild(tierBox);
     const search = el('input', 'codexsearch');
     search.type = 'search';
     search.placeholder = '문구 \u00B7 ID \u00B7 용어로 찾기';
@@ -1909,7 +1909,7 @@
     const bar = el('div', 'codexbar');
     const navRow = el('div', 'segrow');
     navRow.appendChild(el('span', 'seglabel', '바로가기'));
-    const navBox = el('span'); navRow.appendChild(navBox);
+    const navBox = el('span', 'segbox'); navRow.appendChild(navBox);
     bar.appendChild(navRow);
     wrap.appendChild(bar);
 
@@ -2203,6 +2203,10 @@
   }
 
   function leaveOnline() {
+    // 끝나지 않은 판을 두고 나가면, 알리지 않는 한 상대에게는 '연결 끊김'으로만 보인다
+    // (끊김은 재접속을 기다리는 상태라 판이 닫히지 않는다). 그래서 나가기 전에 중단을 보낸다 —
+    // 받는 쪽은 receive 의 'abort' 가 처리한다.
+    if (inOnlineGame() && !G().result) global.Net.abort();
     global.Net.disconnect();
     clearRoom();
     hideLobby();
@@ -2383,6 +2387,8 @@
 
     // 인게임
     $('#tohome').onclick = () => {
+      if (inOnlineGame() && !G().result
+        && !window.confirm('대국을 중단하고 나갈까요? 상대에게 알립니다.')) return;
       if (Game().mode === 'online') leaveOnline();
       renderHomeRecords(); showHome();
     };

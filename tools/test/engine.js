@@ -268,5 +268,75 @@ function movesOf(G, from) {
   check('R3c · 룩이 아니면 면역이 아니다', E.immune(G, E.mkPiece('n', 'b')), false);
 }
 
+/* ─────────────────────────────────────────────────────────────
+   attacked() 와 수 생성이 같은 답을 내는가 (무작위 판 대조)
+
+   attacked() 는 체크 판정의 최다 호출 지점이라 속도 때문에 수 생성과 따로 구현돼 있다.
+   그래서 증강이 수 생성만 바꾸고 attacked 를 안 고치면, 그 증강으로 잡을 수 있는데도
+   체크가 아닌 것으로 판정된다 — P11a 가 실제로 그랬다.
+   둘이 늘 같은 답을 내는지 무작위 판으로 맞춰 본다.
+   ───────────────────────────────────────────────────────────── */
+{
+  // attacked() 안의 augCountFor 가 AUG_BY_ID 를 본다. 앞의 41개는 증강표 없이 돌던 것이라
+  // 순서를 바꾸지 않고 여기서만 증강표를 얹는다.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../game/src/data.js'), 'utf8'), ctx);
+
+  // 수 생성에 관여하는 증강만 모았다 (engine.js 안에 id 가 박혀 있는 것들)
+  const MOVE_AUGS = ['P3b', 'P6a', 'P6b', 'P11a', 'P11c', 'R1a', 'R3c', 'R11a', 'R11c',
+    'N11b', 'Q3c', 'Q6b', 'Q11c'];
+  const TYPES = ['p', 'r', 'n', 'b', 'q'];
+  let seed = 20260928;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const pick = (a) => a[(rnd() * a.length) | 0];
+
+  function randBoard() {
+    const G = E.newGame();
+    G.bd = new Array(64).fill(null);
+    G.ep = null;
+    const used = new Set();
+    const free = () => { let i; do { i = (rnd() * 64) | 0; } while (used.has(i)); used.add(i); return i; };
+    for (const col of ['w', 'b']) G.bd[free()] = E.mkPiece('k', col);
+    const n = 4 + ((rnd() * 14) | 0);
+    for (let j = 0; j < n; j++) {
+      const t = pick(TYPES), col = rnd() < 0.5 ? 'w' : 'b';
+      const i = free();
+      if (t === 'p' && (i < 8 || i >= 56)) continue;      // 폰은 1·8랭크에 설 수 없다
+      const pc = E.mkPiece(t, col);
+      pc.moved = rnd() < 0.5;
+      G.bd[i] = pc;
+    }
+    for (const col of ['w', 'b']) {
+      G.augs[col] = MOVE_AUGS.filter(() => rnd() < 0.3);
+      for (const id of G.augs[col]) G.flags[col][id] = 1;
+    }
+    return G;
+  }
+
+  // 판 위의 '상대 기물이 있는 칸'마다: attacked 가 true ⟺ 그 칸을 잡는 수가 실제로 있다
+  let boards = 0, checked = 0;
+  const bad = [];
+  for (let t = 0; t < 600; t++) {
+    const G = randBoard();
+    boards++;
+    for (const by of ['w', 'b']) {
+      const foe = E.other(by);
+      const caps = new Set();
+      for (const from of E.piecesOf(G, by)) {
+        for (const m of E.genPseudo(G, from)) if (m.capture && G.bd[m.to]) caps.add(m.to);
+      }
+      for (const sq of E.piecesOf(G, foe)) {
+        checked++;
+        const got = E.attacked(G, sq, by), want = caps.has(sq);
+        if (got !== want && bad.length < 4) {
+          bad.push({ sq: name(sq), by, got, want, augs: G.augs[by].join('/'),
+            bd: G.bd.map((p, i) => p ? name(i) + (p.color === 'w' ? p.type.toUpperCase() : p.type) : null).filter(Boolean).join(' ') });
+        }
+      }
+    }
+  }
+  check(`attacked() ≡ 잡는 수 존재 (무작위 ${boards}판 · ${checked}칸)`, bad, []);
+}
+
+
 console.log('\n' + pass + ' pass, ' + fails.length + ' fail' + (fails.length ? ': ' + fails.join(' / ') : ''));
 process.exit(fails.length ? 1 : 0);

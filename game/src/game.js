@@ -184,14 +184,9 @@
   }
   Game.nextThreshold = nextThreshold;
 
-  function sample(arr, n) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[a[i], a[j]] = [a[j], a[i]]; }
-    return a.slice(0, n);
-  }
-
   // 원본 엑셀 증강표는 (기물 × 처치수) 칸마다 선택지가 정확히 3개다.
-  // 그래서 드래프트는 '그 칸 하나'를 그대로 펼쳐 보여주고 1개만 고르게 한다.
+  // 그래서 드래프트는 '그 칸 하나'를 그대로 펼쳐 보여준다. 기본은 1개만 고르고,
+  // K1b 를 가졌으면 같은 칸에서 2개를 고른다 (runDrafts 의 rounds).
   // 어느 기물의 칸을 펼칠지는 방금 처치한 기물의 종류로 정한다.
   function cellOffer(G, side, tier, pieceKo) {
     return global.AUGMENTS

@@ -61,7 +61,7 @@
   // 광역 제거 (킹 제외)
   function wipe(G, squares, by) {
     let n = 0;
-    for (const s of squares) if (G.bd[s] && G.bd[s].type !== 'k') { if (E.removePiece(G, s, { by })) n++; }
+    for (const s of squares) if (!E.protectedPiece(G, s)) { if (E.removePiece(G, s, { by })) n++; }
     return n;
   }
 
@@ -129,8 +129,8 @@
       for (let k = 1; k <= 2; k++) for (let dc = -2; dc <= 2; dc++) {
         const r = r0 + dir * k, c = c0 + dc;
         if (!ok(r, c) || Math.abs(dc) > k) continue;
-        const p = G.bd[idx(r, c)];
-        if (p && p.color !== side && p.type !== 'k') cands.push(idx(r, c));
+        const j = idx(r, c), p = G.bd[j];
+        if (p && p.color !== side && !E.protectedPiece(G, j)) cands.push(j);
       }
       if (!cands.length) return;
       const sq = await api.pickSquare('P6c — 교환할 전방 2칸 이내의 상대 기물을 고르세요', cands, true);
@@ -190,7 +190,7 @@
   def('R1c', {
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'r') return;
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       const sq = await api.pickSquare('R1c — 함께 지정불가로 만들 상대 기물을 고르세요', foes, true);
       const ids = [ctx.mover.id];
       if (sq != null) ids.push(G.bd[sq].id);
@@ -260,7 +260,7 @@
 
   def('R11b', {
     async onGain(G, side, api) {
-      const cands = E.piecesOf(G, side).filter(i => !G.bd[i].moved && G.bd[i].type !== 'k' && G.bd[i].type !== 'r');
+      const cands = E.piecesOf(G, side).filter(i => !G.bd[i].moved && !E.protectedPiece(G, i) && G.bd[i].type !== 'r');
       if (!cands.length) { api.msg('R11b — 한 번도 움직이지 않은 기물이 없습니다.'); return; }
       const sq = await api.pickSquare('룩으로 만들 아군 기물을 고르세요 (한 번도 움직이지 않은 기물)', cands);
       if (sq == null) return;
@@ -347,15 +347,23 @@
     }
   });
 
+  // N3c 가 쓸 수 있는 아군 나이트 — 좌우가 모두 '나이트보다 점수가 높은 적 기물'인 칸.
+  // onGain 과 BLOCK 이 같은 조건을 각자 들고 있어서 한쪽만 고치면 어긋난다. 그래서 여기 한 곳에 둔다.
+  function n3cCands(G, side) {
+    return ownSquares(G, side, 'n').filter(i => {
+      const [r, c] = rc(i);
+      if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
+      const jl = idx(r, c - 1), jr = idx(r, c + 1);
+      const L = G.bd[jl], R = G.bd[jr];
+      return L && R && L.color !== side && R.color !== side &&
+        !E.protectedPiece(G, jl) && !E.protectedPiece(G, jr) &&
+        val(L.type) > 3 && val(R.type) > 3;
+    });
+  }
+
   def('N3c', {
     async onGain(G, side, api) {
-      const cands = ownSquares(G, side, 'n').filter(i => {
-        const [r, c] = rc(i);
-        if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
-        const L = G.bd[idx(r, c - 1)], R = G.bd[idx(r, c + 1)];
-        return L && R && L.color !== side && R.color !== side &&
-          L.type !== 'k' && R.type !== 'k' && val(L.type) > 3 && val(R.type) > 3;
-      });
+      const cands = n3cCands(G, side);
       if (!cands.length) { api.msg('N3c — 조건을 만족하는 나이트가 없습니다. (좌우 모두 나이트보다 높은 점수의 적 기물)'); return; }
       const sq = await api.pickSquare('변이시킬 아군 나이트를 고르세요', cands);
       if (sq == null) return;
@@ -491,7 +499,7 @@
         const light = E.lightSquare(i);
         for (const j of adj(i)) {
           const p = G.bd[j];
-          if (p && p.color !== side && p.type !== 'k' && E.lightSquare(j) === light) {
+          if (p && p.color !== side && !E.protectedPiece(G, j) && E.lightSquare(j) === light) {
             if (E.removePiece(G, j, { by: side })) n++;
           }
         }
@@ -684,7 +692,7 @@
 
   def('B11c', {
     async onGain(G, side, api) {
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       if (!foes.length) { api.msg('대상이 없습니다.'); return; }
       const sq = await api.pickSquare('2턴 동안 살아남으면 강화가 사라질 상대 기물을 고르세요', foes, false, true);
       if (sq == null) return;
@@ -762,7 +770,7 @@
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       const cands = [];
-      for (let i = 0; i < 64; i++) if (G.bd[i] && i !== q && G.bd[i].type !== 'k') cands.push(i);
+      for (let i = 0; i < 64; i++) if (i !== q && !E.protectedPiece(G, i)) cands.push(i);
       const sq = await api.pickSquare('퀸과 함께 포영시킬 기물을 고르세요', cands);
       const until = E.untilOppTurns(G, 1);
       E.phaseOut(G, q, until);
@@ -775,7 +783,7 @@
     async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       if (!foes.length) { api.msg('대상이 없습니다.'); return; }
       const hi = Math.max(...foes.map(i => val(G.bd[i].type)));
       const tops = foes.filter(i => val(G.bd[i].type) === hi);
@@ -790,9 +798,9 @@
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       const types = new Set();
-      for (const j of adj(q)) if (G.bd[j] && G.bd[j].type !== 'k') types.add(G.bd[j].type);
+      for (const j of adj(q)) if (!E.protectedPiece(G, j)) types.add(G.bd[j].type);
       const targets = [];
-      for (let i = 0; i < 64; i++) if (G.bd[i] && G.bd[i].type !== 'k' && types.has(G.bd[i].type)) targets.push(i);
+      for (let i = 0; i < 64; i++) if (!E.protectedPiece(G, i) && types.has(G.bd[i].type)) targets.push(i);
       const n = wipe(G, targets, side);
       E.removePiece(G, q, { force: true });
       api.msg(`Q11a — 인접 기물과 같은 종류의 기물 ${n}개를 제거하고 퀸도 함께 제거되었습니다.`);
@@ -813,7 +821,7 @@
         let n = 0;
         for (let i = 0; i < 64; i++) {
           const p = G.bd[i];
-          if (p && p.color !== side && p.type !== 'k' && within(i, e.sq, 2)) {
+          if (p && p.color !== side && !E.protectedPiece(G, i) && within(i, e.sq, 2)) {
             if (E.removePiece(G, i, { by: side })) n++;
           }
         }
@@ -956,7 +964,7 @@
       let n = 0;
       for (let i = 0; i < 64; i++) {
         const p = G.bd[i];
-        if (p && p.type !== 'k' && p.type !== 'p') { if (E.mutate(G, i, 'p')) n++; }
+        if (!E.protectedPiece(G, i) && p.type !== 'p') { if (E.mutate(G, i, 'p')) n++; }
       }
       api.msg(`K11c — 킹을 제외한 기물 ${n}개가 폰으로 변이했습니다.`);
     }
@@ -970,9 +978,6 @@
   function need(cond, why) { return cond ? null : why; }
 
   const BLOCK = {
-    // ── 폰 ──
-    P1a: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
-    P11b: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
     // ── 룩 ──
     R3a: (G, s) => need(ownSquares(G, s, 'r').length && ownSquares(G, s, 'p').length,
       '아군 룩과 폰이 모두 있어야 합니다'),
@@ -983,19 +988,13 @@
     R11b: (G, s) => need(
       E.piecesOf(G, s).some(i => !G.bd[i].moved && !'kr'.includes(G.bd[i].type)),
       '한 번도 움직이지 않은 기물이 없습니다'),
-    R11c: (G, s) => need(ownSquares(G, s, 'r').length, '아군 룩이 없습니다'),
     // ── 나이트 ──
     N1b: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, s, 'b').length,
       '아군 나이트와 비숍이 모두 있어야 합니다'),
     N3a: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, s, 'p').length,
       '아군 나이트와 폰이 모두 있어야 합니다'),
-    N3c: (G, s) => need(ownSquares(G, s, 'n').some(i => {
-      const [r, c] = rc(i);
-      if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
-      const L = G.bd[idx(r, c - 1)], R = G.bd[idx(r, c + 1)];
-      return L && R && L.color !== s && R.color !== s
-        && L.type !== 'k' && R.type !== 'k' && val(L.type) > 3 && val(R.type) > 3;
-    }), '좌우가 모두 더 높은 점수의 적 기물인 나이트가 없습니다'),
+    N3c: (G, s) => need(n3cCands(G, s).length,
+      '좌우가 모두 더 높은 점수의 적 기물인 나이트가 없습니다'),
     N6b: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, opp(s), 'n').length,
       '양쪽에 나이트가 있어야 합니다'),
     N6c: (G, s) => need(
@@ -1005,14 +1004,10 @@
     N11c: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, opp(s), 'q').length,
       '아군 나이트와 상대 퀸이 모두 살아있어야 합니다'),
     // ── 비숍 ──
-    B1a: (G, s) => {
-      if (!ownSquares(G, s, 'b').length) return '아군 비숍이 없습니다';
-      return null;
-    },
     B1c: (G, s) => need(ownSquares(G, opp(s), 'p').length, '상대 폰이 없습니다'),
     B6b: (G, s) => need(E.piecesOf(G, opp(s)).some(i => !'kq'.includes(G.bd[i].type)),
       '킹·퀸이 아닌 상대 기물이 없습니다'),
-    B11c: (G, s) => need(E.piecesOf(G, opp(s)).some(i => G.bd[i].type !== 'k'),
+    B11c: (G, s) => need(E.piecesOf(G, opp(s)).some(i => !E.protectedPiece(G, i)),
       '지정할 상대 기물이 없습니다'),
     // ── 퀸 ──
     Q1b: (G, s) => need(ownSquares(G, s, 'q').length && ownSquares(G, opp(s), 'q').length,
@@ -1021,13 +1016,10 @@
       '양쪽 퀸이 모두 살아있어야 합니다'),
     Q3a: () => null,                       // 강화가 없어도 '초기화'라는 효과는 성립
     Q6c: (G, s) => need(ownSquares(G, s, 'q').length
-      && E.piecesOf(G, opp(s)).some(i => G.bd[i].type !== 'k'),
+      && E.piecesOf(G, opp(s)).some(i => !E.protectedPiece(G, i)),
       '아군 퀸과 교환할 상대 기물이 필요합니다'),
-    Q11c: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
     // ── 킹 (대부분 판 상태와 무관한 메타 증강) ──
     K1a: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
-    K1b: () => null,
-    K1c: () => null,
     K3a: (G, s) => need(
       global.AUGMENTS.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.augs[s].includes(a.id)),
       '얻을 수 있는 나이트·비숍 6개 강화가 없습니다'),
@@ -1036,7 +1028,6 @@
     K3c: (G, s) => need(
       global.AUGMENTS.some(a => ['룩', '퀸'].includes(a.piece) && a.tier === 11 && !G.augs[s].includes(a.id)),
       '얻을 수 있는 룩·퀸 11개 강화가 없습니다'),
-    K6a: () => null,
     K6b: (G, s) => need(global.PIECES_KO.some(p => E.augCountFor(G, s, p) >= 2),
       '같은 기물을 2회 이상 강화하지 않았습니다'),
     K6c: (G, s) => need(G.augs[s].some(id => {
@@ -1044,7 +1035,6 @@
       return global.AUGMENTS.some(x => x.piece === a.piece && x.tier === a.tier && !G.augs[s].includes(x.id));
     }), '교체할 수 있는 강화가 없습니다'),
     K11a: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
-    K11b: () => null,
     K11c: (G, s) => need(E.piecesOf(G, 'w').concat(E.piecesOf(G, 'b'))
       .some(i => !'kp'.includes(G.bd[i].type)), '폰으로 바꿀 기물이 없습니다'),
   };

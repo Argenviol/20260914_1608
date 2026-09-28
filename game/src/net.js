@@ -34,11 +34,6 @@
 
   function emit(type, payload) { if (Net.onEvent) Net.onEvent(type, payload); }
 
-  Net.isMyTurn = function () {
-    const g = Game() && Game().G;
-    return !!(g && Net.side && g.turn === Net.side);
-  };
-
   /* ───────────────────── 소켓 ───────────────────── */
 
   function wsURL() {

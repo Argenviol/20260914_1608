@@ -138,6 +138,18 @@ function check(name, ok, detail) { console.log((ok ? 'PASS ' : 'FAIL ') + name +
   check('판정 순간 가운데 카드', gotCard, JSON.stringify(sB.seen.filter(t => /center/.test(t))));
   check('내 비밀 증강 공개 카드는 안 뜸(중복)', !sB.seen.some(t => /center: 내 비밀 증강이 공개/.test(t)));
 
+  // ── 10. 판 도중 '메인으로' 로 나가면 상대에게 중단이 전달된다 ──
+  // 예전에는 소켓만 끊겨서 상대 화면은 '연결 끊김'인 채로 판이 계속 열려 있었다.
+  await A.evaluate(() => { window.confirm = () => true; });
+  await A.click('#tohome');
+  const aborted = await B.waitForFunction(
+    () => !!(Game.G && Game.G.result && Game.G.result.aborted), null, { timeout: 8000 }
+  ).then(() => true).catch(() => false);
+  const reason = await B.evaluate(() => (Game.G.result || {}).reason || '');
+  check('상대가 나가면 내 화면에서 판이 중단으로 닫힘', aborted && /중단/.test(reason), reason);
+  const endBox = await B.evaluate(() => (document.querySelector('#endfx .endtitle') || {}).textContent || '');
+  check('중단 화면이 뜸(승패 아님)', endBox === '대국 중단', endBox);
+
   console.log('errors:', A.errors.concat(B.errors));
   await browser.close();
   console.log(fails ? `\n${fails} FAIL` : '\nALL PASS');
