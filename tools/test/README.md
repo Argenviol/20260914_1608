@@ -5,7 +5,8 @@
 `engine.js` 는 규칙만 본다. 브라우저도 중계 서버도 없이 바로 돈다.
 
 ```
-node tools/test/engine.js   # 규칙 회귀 — 폰 전진 거리 · 지정불가 · 포영 · P11a · R3c 면역 (41항목)
+node tools/test/engine.js   # 규칙 회귀 — 폰 전진 거리 · 지정불가 · 포영 · P11a · R3c 면역
+                            # + attacked() 와 수 생성 대조 (42항목)
 node tools/test/ai.js       # 평가·탐색 최적화 회귀 (5항목)
 ```
 
@@ -19,9 +20,10 @@ node tools/test/ai.js       # 평가·탐색 최적화 회귀 (5항목)
 ```
 python server/relay.py                 # 8788
 cd tools/test && npm i playwright-core  # 한 번만
-node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 동기화 (26항목)
+node online.js      # 온라인 두 화면 — 예약 수 · 상대 증강 선택 표시 · 시계 · 알림 · 발동 · 중단 (28항목)
 node augments.js    # 증강 72종 — 조건이 맞는 판을 만들어 훅이 실제로 판을 바꾸는지 (79 시나리오)
-node feedback.js    # 피드백 항목을 실제 화면에서 — 칸을 눌러 두고 카드를 눌러 고른다 (48항목)
+node feedback.js    # 피드백 항목을 실제 화면에서 — 칸을 눌러 두고 카드를 눌러 고른다 (53항목)
+node perf.js        # CPU 6배 느리게 하고 렉 측정 — long task · 스크롤 프레임 (11항목)
 ```
 
 `augments.js` 는 `Game.api` 를 가짜로 바꿔 훅만 본다. `feedback.js` 는 반대로 **api 를 손대지 않고**
@@ -29,3 +31,7 @@ node feedback.js    # 피드백 항목을 실제 화면에서 — 칸을 눌러 
 그래서 '칸에 점이 찍히는지 · 배지가 붙는지 · 선택지가 잠겨서 오는지 · 창이 언제 뜨는지' 까지 잡힌다.
 
 `harness.js` 의 `EXE` 는 크로미움 경로다. 다른 컴퓨터에서는 `npx playwright install chromium` 뒤 그 경로로 바꾼다.
+
+`perf.js` 는 CDP 로 CPU 를 6배 느리게(저가 안드로이드폰 정도) 만든 뒤 50ms 넘게 화면을 잡아 두는 작업과
+스크롤 중 프레임 간격을 잰다. 결과는 6배 값과 실제 기기 환산값을 같이 찍는다. `CPU=4 node perf.js` 로 배수를 바꿀 수 있다.
+가만히 있을 때의 프레임을 먼저 재서 '스로틀 때문인지 우리 코드 때문인지' 를 가른다.
