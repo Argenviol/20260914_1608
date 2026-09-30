@@ -167,6 +167,9 @@
   function withId(r) {
     // 예전 기록에는 id 가 없다. 시각+모드로 만들어 두 번 합쳐도 겹치지 않게 한다.
     if (!r.id) r.id = 'r' + r.at + '-' + (r.mode || '');
+    // 용어를 바꾸기 전에 저장된 전적은 강화 개수를 augs 에 담았다. 읽을 때 upgs 로 옮기고, 다음 저장부터 새 키만 남는다.
+    if (!r.upgs) r.upgs = r.augs || { w: 0, b: 0 };
+    delete r.augs;
     return r;
   }
   function loadRecords() {
@@ -1590,7 +1593,7 @@
       difficulty: gm.mode === 'ai' ? gm.difficulty : null,
       outcome, reason: result.reason, moves: g.moveNo,
       kills: { w: g.kills.w, b: g.kills.b },
-      augs: { w: g.upgs.w.length, b: g.upgs.b.length },   // 키는 이미 저장된 전적(브라우저·서버)과 같아야 해서 그대로 둔다
+      upgs: { w: g.upgs.w.length, b: g.upgs.b.length },
     });
     if (typeof renderHomeRecords === 'function') renderHomeRecords();
 
@@ -1678,7 +1681,7 @@
       row.innerHTML = `<span class="rres">${label}</span>` +
         `<span class="rmode">${r.mode === 'ai' ? 'AI ' + (global.AI.LEVELS[r.difficulty] || {}).label : r.mode === 'online' ? '온라인' : '2인'}</span>` +
         `<span class="rwhy">${r.reason}</span>` +
-        `<span class="rwhen">${mm} · ${r.moves}수 · 강화 ${r.augs.w + r.augs.b}</span>`;
+        `<span class="rwhen">${mm} · ${r.moves}수 · 강화 ${r.upgs.w + r.upgs.b}</span>`;
       list.appendChild(row);
     }
     box.appendChild(list);

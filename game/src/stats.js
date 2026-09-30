@@ -164,7 +164,7 @@
         kills: G.kills[side] | 0,
         opp_kills: G.kills[opp] | 0,
         tier_reached: G.tierIdx[side] | 0,
-        augs: (G.upgs[side] || []).slice(),   // 키는 수퍼베이스 plays.augs 열 이름이라 그대로 둔다
+        upgs: (G.upgs[side] || []).slice(),
         piece_moves: c.per[side].moves,
         piece_kills: c.per[side].kills,
       };
