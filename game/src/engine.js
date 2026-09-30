@@ -23,7 +23,7 @@
   const lightSquare = (i) => ((i >> 3) + (i & 7)) % 2 === 0;
 
   function mkPiece(type, color) {
-    return { id: ++UID, type, color, moved: false, augLost: false };
+    return { id: ++UID, type, color, moved: false, upgLost: false };
   }
 
   // 온라인 대전에서 상대가 만든 판을 채택할 때, 그쪽 id 보다 뒤에서 다시 세게 한다
@@ -46,13 +46,13 @@
       ply: 0,
       ep: -1,                        // 앙파상 목표 칸
       kills: { w: 0, b: 0 },         // 처치 카운트
-      augs: { w: [], b: [] },        // 보유 증강 id
+      upgs: { w: [], b: [] },        // 보유 강화 id
       tierIdx: { w: 0, b: 0 },       // 소비한 티어 수(0~4)
       eff: [],                       // 활성 효과
       phased: [],                    // 포영 {pc, sq, owner, until, data}
       grave: { w: [], b: [] },       // 처치/제거된 아군 기물 (부활용)
       flags: { w: {}, b: {} },       // 1회성 플래그/카운터
-      revealed: {},                  // 공개된 비밀 증강 id
+      revealed: {},                  // 공개된 비밀 강화 id
       log: [],
       hist: [],                      // UCI 기보 (오프닝 북 조회용)
       lastBySide: { w: null, b: null },  // 진영별 마지막 수 (스트립 표시용)
@@ -92,7 +92,7 @@
 
   /* ───────── 효과 헬퍼 ───────── */
 
-  // 지속시간 계산. 증강 획득/발동 시점은 "내 수를 둔 직후"이므로
+  // 지속시간 계산. 강화 획득/발동 시점은 "내 수를 둔 직후"이므로
   //   내 N턴   = 2N 플라이
   //   상대 N턴 = 2N-1 플라이
   /* 두 헬퍼 모두 '호출 시점의 G.ply 는 효과 주인의 턴 ply' 라는 전제 위에 있다.
@@ -113,8 +113,12 @@
   function effs(G, kind, owner) {
     return G.eff.filter(e => e.kind === kind && (owner === undefined || e.owner === owner));
   }
-  function hasEff(G, kind, owner) { return effs(G, kind, owner).length > 0; }
-  function dropEff(G, uid) { G.eff = G.eff.filter(e => e.uid !== uid); }
+  /* '있나' 만 볼 때는 목록을 만들지 않는다 — 이동 생성 한 번에 수십 번 불리는데
+     그때마다 클로저와 빈 배열이 만들어지고 바로 버려졌다. */
+  function hasEff(G, kind, owner) {
+    for (const e of G.eff) if (e.kind === kind && (owner === undefined || e.owner === owner)) return true;
+    return false;
+  }
 
   // 만료된 효과를 떼어내 반환한다. 실제 후처리는 game.js 가 expTag 로 분기한다.
   // (G 안에는 함수를 저장하지 않는다 — AI 가 JSON 복제로 탐색하기 때문)
@@ -130,14 +134,14 @@
   }
   // 룩 면역(R3c)
   function immune(G, pc) {
-    return pc && pc.type === 'r' && ownsAug(G, pc.color, 'R3c');
+    return pc && pc.type === 'r' && ownsUpg(G, pc.color, 'R3c');
   }
 
-  function ownsAug(G, side, id) { return G.augs[side].includes(id); }
+  function ownsUpg(G, side, id) { return G.upgs[side].includes(id); }
 
-  function augCountFor(G, side, koPiece) {
-    return G.augs[side].filter(id => {
-      const a = global.AUG_BY_ID[id];
+  function upgCountFor(G, side, koPiece) {
+    return G.upgs[side].filter(id => {
+      const a = global.UPG_BY_ID[id];
       return a && a.piece === koPiece;
     }).length;
   }
@@ -161,7 +165,7 @@
     G.eff = G.eff.filter(e => !(e.ids && e.ids.includes(p.id) && e.dieWithPiece));
     G.log.push({ t: 'remove', sq: i, piece: p.type, color: p.color });
     // K1c: 자신의 모든 제거를 처치로 간주
-    if (opts.by && ownsAug(G, opts.by, 'K1c') && p.color !== opts.by) {
+    if (opts.by && ownsUpg(G, opts.by, 'K1c') && p.color !== opts.by) {
       addKill(G, opts.by, 1, p);
     }
     return true;
@@ -230,7 +234,7 @@
     if (inCheck(G, 'w') || inCheck(G, 'b')) { G.bd[a] = pa; G.bd[b] = pb; return false; }
     G.log.push({ t: 'swap', a, b });
     /* '교환했습니다' 만으로는 무엇이 어디로 갔는지 알 수가 없다. 둘 다 이름과 칸을 적는다.
-       증강 id 는 여기 안 쓴다 — 비밀 증강이면 기록으로 정체가 새기 때문이다. */
+       강화 id 는 여기 안 쓴다 — 비밀 강화이면 기록으로 정체가 새기 때문이다. */
     const nm = c => (c === 'w' ? '백' : '흑');
     G.lastSwap = `${nm(pa.color)} ${KO[pa.type]} ${sqName(a)} ↔ ${nm(pb.color)} ${KO[pb.type]} ${sqName(b)}`;
     G.log.push({ t: 'text', text: '⇄ ' + G.lastSwap + ' 위치 교환' });
@@ -242,7 +246,7 @@
     // P3a: 폰으로 처치 시 카운팅 2배
     if (G._killByPawn && hasEff(G, 'pawnKillDouble', side)) mult = 2;
     // Q3c: 아군 퀸이 잡혀도 상대 카운트에 미포함
-    if (victim && victim.type === 'q' && ownsAug(G, other(side), 'Q3c')) return;
+    if (victim && victim.type === 'q' && ownsUpg(G, other(side), 'Q3c')) return;
     G.kills[side] += n * mult;
   }
 
@@ -322,14 +326,14 @@
   function isPromoSquare(G, side, to) {
     const [r, c] = rc(to);
     if (r === promotionRank(side)) return true;
-    if (ownsAug(G, side, 'P11c')) return r === 0 || r === 7 || c === 0 || c === 7;
+    if (ownsUpg(G, side, 'P11c')) return r === 0 || r === 7 || c === 0 || c === 7;
     return false;
   }
 
   function genPawn(G, from, side, out) {
     const dir = side === 'w' ? -1 : 1;
     const [r0, c0] = rc(from);
-    const step = ownsAug(G, side, 'P11a') ? 2 : 1;    // P11a: 2칸씩 행동
+    const step = ownsUpg(G, side, 'P11a') ? 2 : 1;    // P11a: 2칸씩 행동
     const push = (to, extra) => {
       if (isPromoSquare(G, side, to)) {
         for (const q of ['q', 'r', 'b', 'n']) out.push(mv(from, to, Object.assign({ promo: q }, extra)));
@@ -343,18 +347,25 @@
       const i = idx(r, c0);
       if (G.bd[i]) {
         // P6b: 정면 처치
-        if (ownsAug(G, side, 'P6b') && G.bd[i].color !== side && !untouchable(G, G.bd[i].id)) {
+        if (ownsUpg(G, side, 'P6b') && G.bd[i].color !== side && !untouchable(G, G.bd[i].id)) {
           push(i, { capture: true });
         }
         break;
       }
       push(i);
     }
-    // 초기 2칸 (기본 규칙)
+    /* 초기 2칸 (기본 규칙).
+       P11a(2칸씩 행동)를 가지고 있으면 위 전진 루프가 이미 이 칸을 냈다. 또 밀어 넣으면 같은 칸이
+       두 번 나오는데, 먼저 나온 쪽에는 double 표시가 없고 ui 의 tryMove 는 moves[0] 을 집는다.
+       그래서 P11a 폰이 2칸을 열어도 G.ep 가 서지 않아 앙파상이 영영 안 걸렸다.
+       이미 있으면 새로 넣지 않고 표시만 얹는다. */
     if (!G.bd[from].moved) {
       const r1 = r0 + dir, r2 = r0 + dir * 2;
       if (onBoard(r2, c0) && !G.bd[idx(r1, c0)] && !G.bd[idx(r2, c0)]) {
-        out.push(mv(from, idx(r2, c0), { double: true }));
+        const to = idx(r2, c0);
+        const dup = out.find(m => m.to === to && !m.capture && !m.promo && !m.back && !m.p1b);
+        if (dup) dup.double = true;
+        else out.push(mv(from, to, { double: true }));
       }
     }
     // P1b: 다음 1회 두 번 전진.
@@ -381,7 +392,7 @@
       }
     }
     // P3b: 후진 (처치 불가)
-    if (ownsAug(G, side, 'P3b')) {
+    if (ownsUpg(G, side, 'P3b')) {
       for (let k = 1; k <= step; k++) {
         const r = r0 - dir * k;
         if (!onBoard(r, c0)) break;
@@ -391,7 +402,7 @@
       }
     }
     // P6a: 좌우 이동 (처치 불가)
-    if (ownsAug(G, side, 'P6a')) {
+    if (ownsUpg(G, side, 'P6a')) {
       for (const dc of [-1, 1]) {
         for (let k = 1; k <= step; k++) {
           const c = c0 + dc * k;
@@ -418,7 +429,7 @@
       case 'p': genPawn(G, from, side, out); break;
       case 'n':
         jumps(G, from, N_JUMP, side, out);
-        if (ownsAug(G, side, 'N11b')) jumps(G, from, N_JUMP2, side, out); // 범위 2배
+        if (ownsUpg(G, side, 'N11b')) jumps(G, from, N_JUMP2, side, out); // 범위 2배
         break;
       case 'b':
         slide(G, from, DIR_B, side, out);
@@ -426,19 +437,19 @@
         if (hasEff(G, 'bishopAsQueen', side)) slide(G, from, DIR_R, side, out);
         break;
       case 'r': {
-        const ph = ownsAug(G, side, 'R11a') ? 2 : (ownsAug(G, side, 'R1a') ? 1 : 0);
+        const ph = ownsUpg(G, side, 'R11a') ? 2 : (ownsUpg(G, side, 'R1a') ? 1 : 0);
         slide(G, from, DIR_R, side, out, ph);
         break;
       }
       case 'q':
         slide(G, from, DIR_Q, side, out);
-        if (ownsAug(G, side, 'Q6b') && augCountFor(G, side, '퀸') >= 1) jumps(G, from, N_JUMP, side, out);
+        if (ownsUpg(G, side, 'Q6b') && upgCountFor(G, side, '퀸') >= 1) jumps(G, from, N_JUMP, side, out);
         // Q1a: 긴 대각선 순간이동
         if (G.flags[side].Q1aReady === from) {
           for (const i of longDiagOf(from)) if (!G.bd[i]) out.push(mv(from, i, { teleport: true }));
         }
         // Q11c: 아군 킹 인접 빈칸으로 귀환
-        if (ownsAug(G, side, 'Q11c')) {
+        if (ownsUpg(G, side, 'Q11c')) {
           const k = findKing(G, side);
           if (k >= 0) {
             const [kr, kc] = rc(k);
@@ -466,7 +477,7 @@
 
   function genCastle(G, from, side, out) {
     const k = G.bd[from];
-    const free = ownsAug(G, side, 'R11c');   // R11c: 조건 무시
+    const free = ownsUpg(G, side, 'R11c');   // R11c: 조건 무시
     if (!free && (k.moved || inCheck(G, side))) return;
     const [r0] = rc(from);
     for (const rookC of [0, 7]) {
@@ -496,21 +507,53 @@
     }
   }
 
-  /* ───── 공격 판정 (효과 무시, 순수 기하) ───── */
-  function attacked(G, sq, by) {
-    const [r0, c0] = rc(sq);
-    // 폰
-    const dir = by === 'w' ? -1 : 1;
-    for (const dc of [-1, 1]) {
-      const r = r0 - dir, c = c0 - dc;
-      if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'p') return true; }
+  /* ───── 공격 판정 (효과 무시, 순수 기하) ─────
+     한 수를 만들 때마다 수십 번 불린다. 안에서 배열·클로저를 만들면 그대로 쓰레기가 되므로
+     방향표와 훑기 함수는 밖에 둔다. */
+  const PAWN_DC = [-1, 1];
+  // dirs 방향으로 훑어 by 진영의 want1/want2 종류를 만나면 true. phase 는 지나칠 수 있는 기물 수.
+  function scanHit(G, r0, c0, by, dirs, want1, want2, phase) {
+    for (const [dr, dc] of dirs) {
+      let r = r0 + dr, c = c0 + dc, passed = 0;
+      while (onBoard(r, c)) {
+        const p = G.bd[idx(r, c)];
+        if (p) {
+          if (p.color === by && (p.type === want1 || p.type === want2)) return true;
+          if (passed < phase) passed++; else break;
+        }
+        r += dr; c += dc;
+      }
     }
-    if (ownsAug(G, by, 'P6b')) {
-      const r = r0 - dir;
-      if (onBoard(r, c0)) { const p = G.bd[idx(r, c0)]; if (p && p.color === by && p.type === 'p') return true; }
+    return false;
+  }
+  function attacked(G, sq, by) {
+    const r0 = sq >> 3, c0 = sq & 7;
+    /* 폰. 사거리는 genPawn 과 같은 규칙이어야 한다 — 예전에는 여기만 1칸으로 굳어 있어서
+       P11a(2칸씩 행동) 폰이 킹을 잡을 수 있는데도 체크로 안 잡혔다. */
+    const dir = by === 'w' ? -1 : 1;
+    const pstep = ownsUpg(G, by, 'P11a') ? 2 : 1;
+    for (let k = 1; k <= pstep; k++) {
+      for (const dc of PAWN_DC) {
+        const r = r0 - dir * k, c = c0 - dc * k;
+        if (!onBoard(r, c)) continue;
+        // 2칸짜리는 중간 칸이 비어 있어야 온다 (genPawn 의 같은 검사)
+        if (k === 2 && G.bd[idx(r0 - dir, c0 - dc)]) continue;
+        const p = G.bd[idx(r, c)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
+    }
+    if (ownsUpg(G, by, 'P6b')) {
+      for (let k = 1; k <= pstep; k++) {
+        const r = r0 - dir * k;
+        if (!onBoard(r, c0)) break;
+        // 전진 루프는 첫 기물에서 멈춘다 — 중간 칸이 막혀 있으면 여기까지 못 온다
+        if (k === 2 && G.bd[idx(r0 - dir, c0)]) break;
+        const p = G.bd[idx(r, c0)];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
     }
     // 나이트
-    const nOff = ownsAug(G, by, 'N11b') ? N_JUMP.concat(N_JUMP2) : N_JUMP;
+    const nOff = ownsUpg(G, by, 'N11b') ? N_JUMP.concat(N_JUMP2) : N_JUMP;
     for (const [dr, dc] of nOff) {
       const r = r0 + dr, c = c0 + dc;
       if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'n') return true; }
@@ -521,28 +564,14 @@
       if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'k') return true; }
     }
     // 슬라이더
-    const rookPhase = ownsAug(G, by, 'R11a') ? 2 : (ownsAug(G, by, 'R1a') ? 1 : 0);
+    const rookPhase = ownsUpg(G, by, 'R11a') ? 2 : (ownsUpg(G, by, 'R1a') ? 1 : 0);
     const bishopQ = hasEff(G, 'bishopAsQueen', by);
-    const scan = (dirs, types, phase) => {
-      for (const [dr, dc] of dirs) {
-        let r = r0 + dr, c = c0 + dc, passed = 0;
-        while (onBoard(r, c)) {
-          const p = G.bd[idx(r, c)];
-          if (p) {
-            if (p.color === by && types.includes(p.type)) return true;
-            if (passed < phase) passed++; else break;
-          }
-          r += dr; c += dc;
-        }
-      }
-      return false;
-    };
-    if (scan(DIR_R, ['r'], rookPhase)) return true;
-    if (scan(DIR_R, ['q'], 0)) return true;
-    if (bishopQ && scan(DIR_R, ['b'], 0)) return true;
-    if (scan(DIR_B, ['b', 'q'], 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'r', 'r', rookPhase)) return true;
+    if (scanHit(G, r0, c0, by, DIR_R, 'q', 'q', 0)) return true;
+    if (bishopQ && scanHit(G, r0, c0, by, DIR_R, 'b', 'b', 0)) return true;
+    if (scanHit(G, r0, c0, by, DIR_B, 'b', 'q', 0)) return true;
     // Q6b: 퀸의 나이트 이동
-    if (ownsAug(G, by, 'Q6b') && augCountFor(G, by, '퀸') >= 1) {
+    if (ownsUpg(G, by, 'Q6b') && upgCountFor(G, by, '퀸') >= 1) {
       for (const [dr, dc] of N_JUMP) {
         const r = r0 + dr, c = c0 + dc;
         if (onBoard(r, c)) { const p = G.bd[idx(r, c)]; if (p && p.color === by && p.type === 'q') return true; }
@@ -570,11 +599,12 @@
     if (p.type === 'b' && G.eff.some(e => e.kind === 'bishopRoot' && e.ids.includes(p.id))) return '비숍 고정';
 
     // N3b: 나이트만 사용 가능
-    const nOnly = effs(G, 'knightOnly').length > 0;
-    if (nOnly && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
+    // (수를 하나 만들 때마다 도는 자리다 — effs() 로 목록을 만들지 않는다)
+    if (hasEff(G, 'knightOnly') && p.type !== 'n' && piecesOf(G, side, 'n').length > 0) return '나이트만 이동 가능';
 
     // R6a/R6b: 기준 룩보다 위/아래로 이동 금지
-    for (const e of effs(G, 'rookLine')) {
+    for (const e of G.eff) {
+      if (e.kind !== 'rookLine') continue;
       if (e.target !== side) continue;
       const ref = e.refSq;
       if (ref === undefined || ref < 0) continue;
@@ -597,7 +627,7 @@
   function applyRaw(G, m) {
     const undo = { m, cap: G.bd[m.to], capSq: m.to, ep: G.ep, moved: null, promoFrom: null, rook: null };
     const p = G.bd[m.from];
-    // 방어: 증강 효과로 기물이 사라진 뒤 낡은 수가 들어오면 조용히 무시한다
+    // 방어: 강화 효과로 기물이 사라진 뒤 낡은 수가 들어오면 조용히 무시한다
     if (!p || (m.castle && !G.bd[m.rookFrom])) {
       console.warn('applyRaw: 빈 칸에서 출발하는 수를 무시했습니다', m);
       undo.noop = true;
@@ -700,8 +730,8 @@
     FILES, VALUE, KO, KO2T, START,
     rc, idx, onBoard, sqName, other, lightSquare, mkPiece, bumpUID, leapPath,
     newGame, findKing, piecesOf, materialScore,
-    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, dropEff, expireEffects,
-    untouchable, immune, ownsAug, augCountFor, protectedPiece,
+    untilMyTurns, untilOppTurns, untilEachTurns, addEff, effs, hasEff, expireEffects,
+    untouchable, immune, ownsUpg, upgCountFor, protectedPiece,
     removePiece, mutate, phaseOut, returnPhased, swapPieces, addKill, nearestEmpty,
     DIR_R, DIR_B, DIR_Q, N_JUMP, N_JUMP2, longDiagOf,
     genPseudo, legalMoves, allLegal, allLegalRelaxed, inCheck, attacked, statusOf,

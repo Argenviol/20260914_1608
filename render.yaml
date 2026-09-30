@@ -8,7 +8,10 @@ services:
     runtime: python
     region: singapore          # 한국에서 가장 가깝다. 실시간 대전이라 지연이 곧 체감이다.
     plan: free
-    branch: 김준영_20260910_1740
+    # 배포되는 브랜치. 대시보드 설정이 실제로 이기지만, 여기가 어긋나 있으면
+    # 나중에 블루프린트를 다시 적용할 때 엉뚱한 브랜치로 붙는다.
+    # (2026-09-19 확인: 배포본이 원본 main 의 내용과 같았다)
+    branch: main
     buildCommand: pip install -r requirements.txt
     startCommand: python server/relay.py
     healthCheckPath: /healthz

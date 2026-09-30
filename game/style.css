@@ -7,9 +7,9 @@
 
    색 사용 규칙
      primary(파랑)      선택 · 이동 · 현재 차례 · 주요 동작
-     status negative    처치 · 체크 · 고를 수 없는 증강      (빨강)
-     status positive    대상 지정 가능 · 내가 얻은 증강      (초록)
-     status cautionary  증강 발동 · 초읽기                  (주황)
+     status negative    처치 · 체크 · 고를 수 없는 강화      (빨강)
+     status positive    대상 지정 가능 · 내가 얻은 강화      (초록)
+     status cautionary  강화 발동 · 초읽기                  (주황)
      accent(cat-1~6)    범주 구분 — 티어, 기물 종류
 
    ★ 범주형 색에는 status 색을 쓰지 않는다.
@@ -33,7 +33,7 @@
   --bg-grid: color-mix(in srgb, var(--wds-coolNeutral-50) 7%, transparent);
   --bg-glyph: color-mix(in srgb, var(--wds-coolNeutral-50) 9%, transparent);
 
-  /* 증강의 지속 유형 — 원본 시트가 칸 색으로 나누던 축.
+  /* 강화의 지속 유형 — 원본 시트가 칸 색으로 나누던 축.
      범주형이므로 status 색(빨강·초록·주황)은 쓰지 않는다. */
   --dur-turn: var(--wds-accent-foreground-cyan);
   --dur-count: var(--wds-accent-foreground-violet);
@@ -41,7 +41,7 @@
   --dur-none: var(--wds-label-assistive);
 
   /* 마지막으로 둔 수 — 어떤 기물이 어디서 어디로 갔는지 판만 보고 알 수 있게.
-     빨강(처치·체크) · 초록(대상 지정) · 주황(증강 발동) · 파랑(선택/이동) · 보라(살펴보기)가
+     빨강(처치·체크) · 초록(대상 지정) · 주황(강화 발동) · 파랑(선택/이동) · 보라(살펴보기)가
      이미 뜻을 갖고 있어서, 남은 자리인 노랑을 쓴다. */
   --last-move: #e9c46a;
   --last-move-edge: #c9a227;
@@ -180,6 +180,17 @@ input[type=range]::-moz-range-thumb {
   display: grid; grid-template-columns: repeat(3, 1fr);
   gap: var(--wds-space-6); margin-bottom: var(--wds-space-16);
 }
+/* 모드 카드 안의 제한시간 — 난이도 세그먼트와 같은 폭·같은 자리에 선다 */
+.tcsel {
+  width: 100%; margin-bottom: var(--wds-space-16);
+  background: var(--wds-background-normal-normal);
+  color: var(--wds-label-normal);
+  border: 1px solid var(--wds-line-normal-normal);
+  border-radius: var(--wds-radius-8);
+  padding: var(--wds-space-8) var(--wds-space-10);
+  font: inherit; font-size: var(--wds-label1-size); cursor: pointer;
+}
+.tcsel:hover { border-color: var(--wds-primary-normal); }
 .difficulty button {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-normal);
@@ -295,15 +306,15 @@ main {
 .stripprog .bar { flex: 1 1 auto; margin: 0; min-width: 40px; }
 .killn { font-weight: 700; color: var(--wds-primary-normal); font-size: var(--wds-label1-size); white-space: nowrap; }
 .killsub { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); white-space: nowrap; }
-.stripaug {
+.stripupg {
   flex: 0 0 auto;
   background: var(--wds-fill-normal); border: 1px solid var(--wds-line-normal-alternative);
   color: var(--wds-label-normal); border-radius: var(--wds-radius-full);
   padding: 2px var(--wds-space-10);
   font-size: var(--wds-label2-size); font-weight: 700;
 }
-.stripaug:hover { border-color: var(--wds-primary-normal); }
-.stripaug.none { color: var(--wds-label-assistive); }
+.stripupg:hover { border-color: var(--wds-primary-normal); }
+.stripupg.none { color: var(--wds-label-assistive); }
 .bar { height: 6px; background: var(--wds-fill-normal); border-radius: var(--wds-radius-full); overflow: hidden; }
 .fill { height: 100%; background: var(--wds-primary-normal); transition: width .35s; }
 
@@ -334,7 +345,7 @@ body.myturn #boardwrap::after {
 }
 
 /* ── 용어 뜻 풍선 ──
-   증강을 고르는 화면에서도 눌러야 하므로 오버레이(120)보다 위에 둔다. */
+   강화를 고르는 화면에서도 눌러야 하므로 오버레이(120)보다 위에 둔다. */
 .tw[data-term] { cursor: help; }
 .ttag[data-term] { cursor: help; }
 .termpop {
@@ -358,14 +369,14 @@ body.myturn #boardwrap::after {
   font-size: var(--wds-label1-size); line-height: 1.65; color: var(--wds-label-neutral);
 }
 
-/* ── 증강 카드의 교환 메모 ── */
-.augnote {
+/* ── 강화 카드의 교환 메모 ── */
+.upgnote {
   display: flex; align-items: baseline; gap: var(--wds-space-6);
   margin-top: var(--wds-space-8); padding-top: var(--wds-space-8);
   border-top: 1px dashed var(--wds-line-normal-alternative);
   font-size: var(--wds-label2-size); color: var(--wds-label-neutral);
 }
-.augnotelabel {
+.upgnotelabel {
   flex: 0 0 auto; font-weight: 700;
   color: var(--wds-cat-4, var(--wds-label-alternative));
 }
@@ -382,7 +393,7 @@ body.myturn #boardwrap::after {
 }
 .logback:hover { filter: brightness(1.08); }
 
-/* ── 마지막 수 · 증강 (탭 위) ──
+/* ── 마지막 수 · 강화 (탭 위) ──
    진영 스트립 안에 있을 때는 처치 눈금과 한 줄을 다투다 좁아지면 겹쳤다.
    스트립 너비가 창이 아니라 판에 딸려 있어서 창 기준으로는 막을 수도 없었다. */
 #lastmoves {
@@ -399,7 +410,7 @@ body.myturn #boardwrap::after {
   font-size: var(--wds-label2-size);
 }
 .lmrow .striplast { flex: 1 1 auto; text-align: left; }
-.lmrow .stripaug { margin-left: auto; }
+.lmrow .stripupg { margin-left: auto; }
 
 /* ── 오른쪽 탭 패널 ── */
 #tabs {
@@ -495,7 +506,7 @@ body.myturn #boardwrap::after {
 /* 대상 지정 — positive */
 .sq.pick { box-shadow: inset 0 0 0 4px var(--wds-status-positive); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { box-shadow: inset 0 0 0 4px var(--wds-line-status-positive-normal); } }
-/* 증강 발동 — cautionary */
+/* 강화 발동 — cautionary */
 .sq.flash { animation: flashsq 1.5s ease-out; }
 @keyframes flashsq {
   0% { box-shadow: inset 0 0 0 100px var(--wds-status-cautionary); }
@@ -619,21 +630,21 @@ body.myturn #boardwrap::after {
   color: var(--wds-status-positive);
 }
 
-.auglist { display: flex; flex-direction: column; gap: var(--wds-space-6); }
-.aug {
+.upglist { display: flex; flex-direction: column; gap: var(--wds-space-6); }
+.upg {
   background: var(--wds-background-normal-normal);
   border: 1px solid var(--wds-line-normal-alternative);
   border-radius: var(--wds-radius-8);
   padding: var(--wds-space-8) var(--wds-space-10);
   font-size: var(--wds-label1-size);
 }
-.aug.hidden { opacity: .6; font-style: italic; }
-.aug b { margin-right: var(--wds-space-4); }
-.augid {
+.upg.hidden { opacity: .6; font-style: italic; }
+.upg b { margin-right: var(--wds-space-4); }
+.upgid {
   font-size: var(--wds-caption-size); color: var(--wds-label-assistive);
   font-weight: 700; margin-right: var(--wds-space-4); letter-spacing: .03em;
 }
-.augtext { color: var(--wds-label-neutral); margin-top: var(--wds-space-4); line-height: 1.55; }
+.upgtext { color: var(--wds-label-neutral); margin-top: var(--wds-space-4); line-height: 1.55; }
 .dim { color: var(--wds-label-assistive); font-size: var(--wds-label1-size); }
 
 /* 티어 태그 — 범주형이므로 accent 램프 사용 (status 색 금지) */
@@ -669,7 +680,7 @@ body.myturn #boardwrap::after {
 
 .line { color: var(--wds-label-alternative); border-bottom: 1px solid var(--wds-line-normal-alternative); padding: 3px 0; }
 .line.cap { color: var(--wds-status-negative); }
-.line.aug { color: var(--wds-status-cautionary); }
+.line.upg { color: var(--wds-status-cautionary); }
 .line.gain { color: var(--wds-primary-normal); }
 .line.chk { color: var(--wds-status-negative); font-weight: 700; }
 .line:last-child { color: var(--wds-label-normal); border-bottom: 0; }
@@ -729,47 +740,12 @@ body.myturn #boardwrap::after {
 .cbody { font-size: var(--wds-body2-size); line-height: 1.6; margin-top: var(--wds-space-10); color: var(--wds-label-neutral); }
 .centercard .termtags { justify-content: center; }
 
-/* ═══════════════ 진행 기록 ═══════════════ */
-#logpanel {
-  position: fixed; right: var(--wds-space-16); top: 108px; z-index: 40;
-  width: min(360px, 32vw);
-  background: var(--wds-background-elevated-normal);
-  border: 1px solid var(--wds-line-normal-normal);
-  border-radius: var(--wds-radius-12);
-  box-shadow: var(--wds-shadow-large);
-  display: none; flex-direction: column; max-height: calc(100vh - 150px);
-}
-#logpanel.show { display: flex; }
-.logtop {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: var(--wds-space-10) var(--wds-space-12);
-  border-bottom: 1px solid var(--wds-line-normal-alternative);
-  font-size: var(--wds-label1-size); font-weight: 700;
-}
-.logx {
-  background: transparent; border: 1px solid var(--wds-line-normal-normal);
-  color: var(--wds-label-alternative); border-radius: var(--wds-radius-6);
-  padding: var(--wds-space-2) var(--wds-space-10); font-size: var(--wds-label2-size);
-}
-.logx:hover { color: var(--wds-label-normal); border-color: var(--wds-primary-normal); }
-#log {
-  flex: 1 1 auto; min-height: 0; overflow: auto;
-  background: var(--wds-background-normal-alternative);
-  border-radius: 0 0 var(--wds-radius-12) var(--wds-radius-12);
-  padding: var(--wds-space-8) var(--wds-space-12);
-  font-size: var(--wds-label1-size); line-height: 1.65;
-}
-#log .line { color: var(--wds-label-alternative); border-bottom: 1px solid var(--wds-line-normal-alternative); padding: 2px 0; }
-#log .line.cap { color: var(--wds-status-negative); }
-#log .line.aug { color: var(--wds-status-cautionary); }
-#log .line.gain { color: var(--wds-primary-normal); }
-#log .line.chk { color: var(--wds-status-negative); font-weight: 700; }
-#log .line:last-child { color: var(--wds-label-normal); }
-
 /* ═══════════════ 모달 ═══════════════ */
 .overlay {
+  /* 뒤를 흐리게(backdrop-filter) 하지 않는다. 도감처럼 안쪽이 스크롤되는 화면에서는
+     스크롤 한 프레임마다 흐림을 다시 그려서, 느린 기기에서 프레임이 3배로 늘어난다
+     (측정: 6배 느린 CPU 에서 최악 87ms → 29ms). dimmer 자체가 이미 충분히 어둡다. */
   position: fixed; inset: 0; background: var(--wds-material-dimmer);
-  backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
   z-index: 120; padding: var(--wds-space-20);          /* #home(90) 위 */
 }
@@ -818,7 +794,7 @@ body.myturn #boardwrap::after {
 }
 .chk { display: flex; align-items: center; gap: var(--wds-space-4); color: var(--wds-label-alternative); font-size: var(--wds-label1-size); }
 
-/* ═══════════════ 증강 드래프트 ═══════════════ */
+/* ═══════════════ 강화 드래프트 ═══════════════ */
 .drafthead { display: flex; align-items: baseline; gap: var(--wds-space-12); flex-wrap: wrap; }
 .draftmeta { display: flex; gap: var(--wds-space-6); flex-wrap: wrap; }
 .dpill {
@@ -861,12 +837,12 @@ body.myturn #boardwrap::after {
 .d-none  > .durchip, .durchip.d-none  { color: var(--dur-none);  border-color: var(--wds-line-normal-normal); }
 .durlegend { display: inline-flex; gap: var(--wds-space-6); flex-wrap: wrap; align-items: center; }
 
-/* 보유 증강 목록에도 같은 색 띠를 준다 */
-.aug { border-left: 3px solid var(--wds-line-normal-alternative); }
-.aug.d-turn  { border-left-color: var(--dur-turn); }
-.aug.d-count { border-left-color: var(--dur-count); }
-.aug.d-perm  { border-left-color: var(--dur-perm); }
-.aug .durchip { margin-right: var(--wds-space-4); vertical-align: 1px; }
+/* 보유 강화 목록에도 같은 색 띠를 준다 */
+.upg { border-left: 3px solid var(--wds-line-normal-alternative); }
+.upg.d-turn  { border-left-color: var(--dur-turn); }
+.upg.d-count { border-left-color: var(--dur-count); }
+.upg.d-perm  { border-left-color: var(--dur-perm); }
+.upg .durchip { margin-right: var(--wds-space-4); vertical-align: 1px; }
 .cardtop { display: flex; align-items: center; gap: var(--wds-space-6); margin-bottom: var(--wds-space-8); }
 .cardid { font-size: var(--wds-label1-size); font-weight: 700; color: var(--wds-primary-normal); letter-spacing: .03em; }
 .cardtag {
@@ -876,7 +852,7 @@ body.myturn #boardwrap::after {
 }
 .cardtag.secret { color: var(--wds-cat-6); }
 .cardtext { font-size: var(--wds-body2-size); line-height: 1.6; }
-/* 고를 수 없는 증강 — negative */
+/* 고를 수 없는 강화 — negative */
 .card.blocked {
   opacity: .55; cursor: not-allowed;
   border-color: var(--wds-line-status-negative-normal);
@@ -895,24 +871,27 @@ body.myturn #boardwrap::after {
   border: 1px solid var(--wds-line-status-negative-normal);
   border-radius: var(--wds-radius-6); padding: var(--wds-space-6) var(--wds-space-8); line-height: 1.5;
 }
-.overlay.peeking { background: transparent; backdrop-filter: none; pointer-events: none; }
+.overlay.peeking { background: transparent; pointer-events: none; }
 .overlay.peeking .modal { opacity: 0; pointer-events: none; }
+/* 판 보는 중 안내 — 강화를 아직 안 골랐다는 걸 놓치면 30초가 그냥 간다.
+   판 위에 떠 있는 바 하나뿐이라 작으면 눈에 안 들어온다 (피드백 '플레이화면 2'). */
 .peekbar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--wds-space-24); z-index: 130;
   background: var(--wds-background-elevated-normal);
   border: 2px solid var(--wds-status-cautionary);
   color: var(--wds-label-normal);
-  border-radius: var(--wds-radius-12);
-  padding: var(--wds-space-10) var(--wds-space-16);
-  display: none; gap: var(--wds-space-12); align-items: center;
-  box-shadow: var(--wds-shadow-large); font-size: var(--wds-label1-size); font-weight: 600;
+  border-radius: var(--wds-radius-16);
+  padding: var(--wds-space-16) var(--wds-space-20);
+  display: none; gap: var(--wds-space-20); align-items: center;
+  box-shadow: var(--wds-shadow-large); font-size: var(--wds-body1-size); font-weight: 600;
 }
 .peekbar.show { display: flex; }
-.peekmsg { display: flex; flex-direction: column; gap: 2px; }
-.peekmsg b { font-size: var(--wds-heading1-size); font-weight: 700; }
-.peeksub { font-size: var(--wds-label1-size); color: var(--wds-label-alternative); font-weight: 500; }
+.peekmsg { display: flex; flex-direction: column; gap: 3px; }
+.peekmsg b { font-size: var(--wds-title2-size); line-height: var(--wds-title2-height); font-weight: 700; }
+.peeksub { font-size: var(--wds-heading2-size); color: var(--wds-label-alternative); font-weight: 500; }
 .skipbtn.big {
-  font-size: var(--wds-body2-size); padding: var(--wds-space-10) var(--wds-space-16);
+  font-size: var(--wds-title3-size); line-height: var(--wds-title3-height); font-weight: 700;
+  padding: var(--wds-space-12) var(--wds-space-20);
   border-width: 2px; border-color: var(--wds-status-cautionary); color: var(--wds-status-cautionary);
 }
 
@@ -954,16 +933,25 @@ body.myturn #boardwrap::after {
   margin-top: var(--wds-space-16); padding-bottom: var(--wds-space-12);
   border-bottom: 1px solid var(--wds-line-normal-alternative);
 }
-.segrow { display: flex; align-items: center; gap: var(--wds-space-8); }
+.segrow { display: flex; align-items: center; gap: var(--wds-space-8); min-width: 0; }
 .seglabel { font-size: var(--wds-label2-size); font-weight: 700; color: var(--wds-label-assistive); }
+/* 버튼 줄이 좁은 폭에서 옆으로 밀릴 수 있게 — flex 아이템은 min-width:auto 라 기본은 안 줄어든다 */
+.seglabel { flex: 0 0 auto; }
+.segbox { display: flex; min-width: 0; }
 .seg {
   display: inline-flex; background: var(--wds-fill-normal);
   border-radius: var(--wds-radius-8); padding: 2px;
+  /* 아주 좁은 폰(320px)에서는 '전체·폰·룩·나이트·비숍·퀸·킹'이 한 줄에 안 들어간다.
+     글자를 쪼개는 대신 이 줄만 옆으로 밀어 본다. */
+  max-width: 100%; overflow-x: auto;
+  scrollbar-width: none;
 }
+.seg::-webkit-scrollbar { display: none; }
 .seg button {
   background: transparent; border: 0; color: var(--wds-label-alternative);
   font-size: var(--wds-label1-size); font-weight: 700;
   border-radius: var(--wds-radius-6); padding: var(--wds-space-4) var(--wds-space-10);
+  white-space: nowrap;                    /* 좁은 폰에서 '나이트'가 '나이/트'로 잘리지 않게 */
 }
 .seg button:hover { color: var(--wds-label-normal); }
 .seg button.on {
@@ -982,8 +970,8 @@ body.myturn #boardwrap::after {
   /* 예전에는 68vh 로 못 박아 뒀다. 머리말·닫기 버튼을 더하면 모달 높이(90vh)를 넘겨서
      모달도 같이 스크롤됐다. 남은 높이를 그대로 쓰게 두면 스크롤바가 하나로 끝난다. */
   flex: 1 1 auto; min-height: 120px;
-  overflow: auto; margin-top: var(--wds-space-16);
-  display: flex; flex-direction: column; gap: var(--wds-space-16);
+  overflow: auto; margin-top: var(--wds-space-12);
+  display: flex; flex-direction: column; gap: var(--wds-space-12);
   /* 스크롤바가 카드에 딱 붙으면 카드 테두리와 겹쳐 보인다. 한 칸 띄운다. */
   padding-right: var(--wds-space-12);
   scrollbar-width: thin;
@@ -1008,14 +996,14 @@ body.myturn #boardwrap::after {
   display: flex; align-items: baseline; gap: var(--wds-space-8);
   position: sticky; top: 0; z-index: 2;
   background: var(--wds-background-elevated-normal);
-  padding: var(--wds-space-6) 0; border-bottom: 1px solid var(--wds-line-normal-alternative);
+  padding: var(--wds-space-4) 0; border-bottom: 1px solid var(--wds-line-normal-alternative);
 }
 .csechead b { font-size: var(--wds-heading1-size); }
 .ccols {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
-  gap: var(--wds-space-12); align-items: start;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(212px, 100%), 1fr));
+  gap: var(--wds-space-8); align-items: start;
 }
-.ccol { display: flex; flex-direction: column; gap: var(--wds-space-8); }
+.ccol { display: flex; flex-direction: column; gap: var(--wds-space-6); }
 
 /* 티어 칼럼이 부모의 행을 그대로 쓰게 해서 모든 카드 높이를 맞춘다.
    행 개수는 ui.js 가 gridTemplateRows 로 넣어 준다 (칸마다 3개지만 검색하면 줄어든다).
@@ -1023,6 +1011,16 @@ body.myturn #boardwrap::after {
 @supports (grid-template-rows: subgrid) {
   .ccols { align-items: stretch; }
   .ccol { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; }
+}
+
+/* 위의 subgrid 규칙은 티어 칸을 전부 '한 줄'에 묶는다(grid-row: 1 / -1).
+   칸이 4개라 한 줄에 다 들어가려면 4×212 + 간격 = 약 980px 이 필요하고, 그보다 좁으면
+   격자가 묵시적 칼럼을 만들어 카드가 93px 로 눌리고 가로로 삐져나갔다.
+   좁으면 한 줄 묶기를 풀어 칸이 자연스럽게 다음 줄로 넘어가게 둔다
+   (카드 높이는 줄 안에서만 맞는다 — 위 주석대로 어긋나 보일 뿐 못 쓰지는 않는다). */
+@media (max-width: 980px) {
+  .ccols { align-items: start; }
+  .ccol { display: flex; grid-row: auto; grid-template-rows: none; }
 }
 .ctier {
   font-size: var(--wds-label2-size); font-weight: 700; letter-spacing: .04em;
@@ -1035,13 +1033,15 @@ body.myturn #boardwrap::after {
   border: 1px solid var(--wds-line-normal-alternative);
   border-top: 3px solid var(--dur-none);
   border-radius: var(--wds-radius-8);
-  padding: var(--wds-space-10) var(--wds-space-12);
+  padding: var(--wds-space-8) var(--wds-space-10);
 }
 .ccard.d-turn  { border-top-color: var(--dur-turn);  border-top-style: dashed; }
 .ccard.d-count { border-top-color: var(--dur-count); border-top-style: dotted; }
 .ccard.d-perm  { border-top-color: var(--dur-perm);  border-top-style: solid; }
-.ccard .cardtop { margin-bottom: var(--wds-space-6); flex-wrap: wrap; }
+.ccard .cardtop { margin-bottom: var(--wds-space-4); flex-wrap: wrap; }
 .ctext { font-size: var(--wds-label1-size); line-height: 1.6; }
+/* 도감은 한 기물 12장이 한 화면에 들어오는 게 목표라 줄간격을 조금 좁힌다 */
+.ccard .ctext { line-height: 1.5; }
 
 /* 규칙 화면 */
 /* 4단계짜리 흐름이라 3+1 로 쪼개지면 흐름으로 안 읽힌다. 4 → 2 → 1 로만 접는다. */
@@ -1075,6 +1075,20 @@ body.myturn #boardwrap::after {
   border-radius: var(--wds-radius-8); padding: var(--wds-space-10) var(--wds-space-12);
 }
 .rname { font-weight: 700; margin-bottom: var(--wds-space-4); }
+/* 전역 룰 — 이름만 보이고 본문은 접혀 있다 */
+.rhint { font-size: var(--wds-label1-size); color: var(--wds-label-assistive); margin-bottom: var(--wds-space-6); }
+.rfold { padding: var(--wds-space-8) var(--wds-space-12); align-self: start; }
+.rfold > summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--wds-space-6);
+  margin-bottom: 0;
+}
+.rfold > summary::-webkit-details-marker { display: none; }
+.rfold > summary::after {
+  content: '\002B'; margin-left: auto; color: var(--wds-label-assistive); font-weight: 700;
+}
+.rfold[open] > summary::after { content: '\2212'; }
+.rfold[open] > summary { margin-bottom: var(--wds-space-6); }
+.rfold > summary:hover { color: var(--wds-primary-normal); }
 
 /* 도감·규칙은 본문이 스크롤되므로, 닫기는 본문 밖 오른쪽 아래에 붙인다 */
 .codex { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -1258,7 +1272,9 @@ body.athome { overflow: hidden; }
   header { padding: var(--wds-space-10) var(--wds-space-14); gap: var(--wds-space-10); }
   main { padding: var(--wds-space-12) var(--wds-space-14); }
   .strip { flex-wrap: wrap; }
-  .stripprog { order: 3; width: 100%; }
+  /* flex 아이템이라 width 는 안 먹는다 — .stripprog 의 flex-basis(90px)가 이긴다.
+     예전에는 width:100% 로 적어 둬서 좁은 폰에서 줄이 안 바뀌고 눈금이 잘렸다. */
+  .stripprog { order: 3; flex-basis: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1364,7 +1380,7 @@ body.reviewing #turnbar { display: none; }
 /* 방 대기 화면 */
 #lobby {
   position: fixed; inset: 0; z-index: 125;
-  background: var(--wds-material-dimmer); backdrop-filter: blur(3px);
+  background: var(--wds-material-dimmer);           /* 흐림 없음 — .overlay 와 같은 이유 */
   display: flex; align-items: center; justify-content: center; padding: var(--wds-space-20);
 }
 #lobby.hidden { display: none; }
@@ -1469,7 +1485,7 @@ body.reviewing #turnbar { display: none; }
 .chatinput input:focus { outline: none; border-color: var(--wds-primary-normal); }
 #tabpanel { display: flex; flex-direction: column; }
 
-/* ── 증강 고르는 제한시간 ── */
+/* ── 강화 고르는 제한시간 ── */
 .drafttimer { display: flex; align-items: center; gap: var(--wds-space-8); margin-left: auto; }
 .dtnum {
   font-size: var(--wds-heading1-size); font-weight: 800;
@@ -1644,3 +1660,69 @@ body::after {
 }
 body.athome > header,
 body.athome > main { visibility: hidden; }
+
+/* ═══════════════ 수 예약 (상대 차례에 미리 두기) ═══════════════
+   선택·이동(파랑)과 헷갈리지 않게 보라 계열을 쓴다. 살펴보기(peek)와 같은 계열이지만
+   예약은 칸을 채워 칠하고, 살펴보기는 테두리·점만 찍는다. */
+:root { --premove: var(--wds-accent-foreground-purple, #a56cff); }
+.sq.pmsel { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--premove) 38%, transparent); }
+.sq.pmdest::after {
+  content: ''; position: absolute; width: 28%; height: 28%;
+  border-radius: var(--wds-radius-full); background: var(--premove); opacity: .8;
+}
+.sq.pmcap::after {
+  content: ''; position: absolute; inset: 5%;
+  border-radius: var(--wds-radius-full); border: 4px solid var(--premove);
+}
+.sq.premove {
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--premove) 34%, transparent),
+              inset 0 0 0 2px var(--premove);
+}
+.sq.last.premove { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--premove) 34%, transparent), inset 0 0 0 2px var(--premove); }
+.pmchip {
+  flex: 0 0 auto; margin-left: var(--wds-space-8);
+  background: color-mix(in srgb, var(--premove) 18%, transparent);
+  border: 1px solid var(--premove); color: var(--premove);
+  border-radius: var(--wds-radius-full); padding: 2px var(--wds-space-10);
+  font-size: var(--wds-label2-size); font-weight: 700; white-space: nowrap;
+}
+.pmchip:hover { background: color-mix(in srgb, var(--premove) 30%, transparent); }
+.pmhint { flex: 0 0 auto; margin-left: auto; font-size: var(--wds-caption-size); color: var(--wds-label-assistive); white-space: nowrap; }
+@media (max-width: 900px) { .pmhint { display: none; } }
+
+/* ═══════════════ 상대가 강화를 고르는 중 (온라인) ═══════════════
+   판 가운데 안내는 클릭을 막지 않는다 — 그동안 판을 살펴보거나 수를 예약할 수 있어야 한다. */
+#oppdraft {
+  position: absolute; inset: 0; z-index: 15;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+#oppdraft[hidden] { display: none; }
+.oppdraftcard {
+  background: color-mix(in srgb, var(--wds-background-elevated-normal) 90%, transparent);
+  border: 2px solid var(--wds-primary-normal);
+  border-radius: var(--wds-radius-16);
+  padding: var(--wds-space-14) var(--wds-space-24);
+  text-align: center; box-shadow: var(--wds-shadow-xlarge);
+  animation: cpop .32s cubic-bezier(.2, 1.5, .4, 1) both;
+}
+.odtitle { font-size: var(--wds-heading1-size); font-weight: 700; }
+.odsub { font-size: var(--wds-label2-size); color: var(--wds-label-alternative); margin-top: 2px; }
+.odtime { font-family: var(--wds-font-mono); font-size: var(--wds-title2-size); font-weight: 700; color: var(--wds-primary-normal); margin-top: var(--wds-space-6); }
+#oppdrafttimer {
+  display: flex; align-items: center; gap: var(--wds-space-8);
+  padding: var(--wds-space-8) var(--wds-space-12);
+  background: var(--wds-background-normal-alternative);
+  border: 1px solid var(--wds-primary-normal);
+  border-radius: var(--wds-radius-10);
+  margin-bottom: var(--wds-space-8);
+}
+#oppdrafttimer[hidden] { display: none; }
+#oppdrafttimer .odlabel { font-size: var(--wds-label2-size); font-weight: 700; white-space: nowrap; }
+#oppdrafttimer .dtbar { flex: 1 1 auto; }
+#oppdrafttimer.urgent .dtnum { color: var(--wds-status-negative); animation: blink .6s infinite alternate; }
+#oppdrafttimer.urgent .dtfill { background: var(--wds-status-negative); }
+
+/* 판정이 끝나 더는 일어날 게 없는 강화 (B3a·B3b) */
+.upg.spent { opacity: .55; }
+.centercard.spent { border-color: var(--wds-label-assistive); }

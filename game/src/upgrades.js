@@ -1,8 +1,8 @@
 /* ============================================================
-   무제체스 - 증강 구현 (72종)
+   무제체스 - 강화 구현 (72종)
 
    훅
-     onGain(G, side, api)          증강 획득 즉시
+     onGain(G, side, api)          강화 획득 즉시
      onCapture(G, side, api, ctx)  처치 발생 시  ctx={to, mover, victim, victimSq}
      onAfterMove(G, side, api, ctx) 이동 완료 후 ctx={move, mover}
      onTurnStart(G, side, api)     자신의 턴 시작
@@ -16,7 +16,7 @@
   'use strict';
   const E = global.Engine;
   const A = {};                       // 구현 레지스트리
-  global.AugImpl = A;
+  global.UpgImpl = A;
 
   /* ───────── 공용 헬퍼 ───────── */
   const opp = E.other;
@@ -26,8 +26,20 @@
   function sched(G, side, tag, fireAt, data) {
     return E.addEff(G, Object.assign({ kind: 'sched', owner: side, tag, fireAt }, data || {}));
   }
+  /* R3c 룩은 '제거 · 포영 · 교환 · 지정불가' 에 면역이다.
+     앞의 셋은 engine 의 removePiece · phaseOut · swapPieces 가 각각 막고 있었는데
+     지정불가만 빠져 있어서, 카드 문구에는 있는 면역이 실제로는 안 걸렸다. 여기서 한 번에 거른다. */
   function untarget(G, side, ids, until) {
-    return E.addEff(G, { kind: 'untargetable', owner: side, ids: ids.filter(Boolean), until });
+    const keep = ids.filter(id => {
+      if (!id) return false;
+      for (let i = 0; i < 64; i++) {
+        const p = G.bd[i];
+        if (p && p.id === id) return !E.immune(G, p);
+      }
+      return true;                       // 판에 없는 기물(포영 중 등)은 그대로 둔다
+    });
+    if (!keep.length) return null;
+    return E.addEff(G, { kind: 'untargetable', owner: side, ids: keep, until });
   }
   function adj(i, includeDiag) {
     const [r, c] = rc(i), out = [];
@@ -49,7 +61,7 @@
   // 광역 제거 (킹 제외)
   function wipe(G, squares, by) {
     let n = 0;
-    for (const s of squares) if (G.bd[s] && G.bd[s].type !== 'k') { if (E.removePiece(G, s, { by })) n++; }
+    for (const s of squares) if (!E.protectedPiece(G, s)) { if (E.removePiece(G, s, { by })) n++; }
     return n;
   }
 
@@ -117,8 +129,8 @@
       for (let k = 1; k <= 2; k++) for (let dc = -2; dc <= 2; dc++) {
         const r = r0 + dir * k, c = c0 + dc;
         if (!ok(r, c) || Math.abs(dc) > k) continue;
-        const p = G.bd[idx(r, c)];
-        if (p && p.color !== side && p.type !== 'k') cands.push(idx(r, c));
+        const j = idx(r, c), p = G.bd[j];
+        if (p && p.color !== side && !E.protectedPiece(G, j)) cands.push(j);
       }
       if (!cands.length) return;
       const sq = await api.pickSquare('P6c — 교환할 전방 2칸 이내의 상대 기물을 고르세요', cands, true);
@@ -178,7 +190,7 @@
   def('R1c', {
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'r') return;
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       const sq = await api.pickSquare('R1c — 함께 지정불가로 만들 상대 기물을 고르세요', foes, true);
       const ids = [ctx.mover.id];
       if (sq != null) ids.push(G.bd[sq].id);
@@ -248,7 +260,7 @@
 
   def('R11b', {
     async onGain(G, side, api) {
-      const cands = E.piecesOf(G, side).filter(i => !G.bd[i].moved && G.bd[i].type !== 'k' && G.bd[i].type !== 'r');
+      const cands = E.piecesOf(G, side).filter(i => !G.bd[i].moved && !E.protectedPiece(G, i) && G.bd[i].type !== 'r');
       if (!cands.length) { api.msg('R11b — 한 번도 움직이지 않은 기물이 없습니다.'); return; }
       const sq = await api.pickSquare('룩으로 만들 아군 기물을 고르세요 (한 번도 움직이지 않은 기물)', cands);
       if (sq == null) return;
@@ -289,7 +301,7 @@
   def('N1c', {
     async onGain(G, side) { G.flags[side].N1c = 1; },
     async onCapture(G, side, api, ctx) {
-      // 이 증강을 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
+      // 이 강화를 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
       if (ctx.regrant) return;
       if (ctx.mover.type !== 'n') return;
       if (!(G.flags[side].N1c > 0)) return;
@@ -335,15 +347,23 @@
     }
   });
 
+  // N3c 가 쓸 수 있는 아군 나이트 — 좌우가 모두 '나이트보다 점수가 높은 적 기물'인 칸.
+  // onGain 과 BLOCK 이 같은 조건을 각자 들고 있어서 한쪽만 고치면 어긋난다. 그래서 여기 한 곳에 둔다.
+  function n3cCands(G, side) {
+    return ownSquares(G, side, 'n').filter(i => {
+      const [r, c] = rc(i);
+      if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
+      const jl = idx(r, c - 1), jr = idx(r, c + 1);
+      const L = G.bd[jl], R = G.bd[jr];
+      return L && R && L.color !== side && R.color !== side &&
+        !E.protectedPiece(G, jl) && !E.protectedPiece(G, jr) &&
+        val(L.type) > 3 && val(R.type) > 3;
+    });
+  }
+
   def('N3c', {
     async onGain(G, side, api) {
-      const cands = ownSquares(G, side, 'n').filter(i => {
-        const [r, c] = rc(i);
-        if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
-        const L = G.bd[idx(r, c - 1)], R = G.bd[idx(r, c + 1)];
-        return L && R && L.color !== side && R.color !== side &&
-          L.type !== 'k' && R.type !== 'k' && val(L.type) > 3 && val(R.type) > 3;
-      });
+      const cands = n3cCands(G, side);
       if (!cands.length) { api.msg('N3c — 조건을 만족하는 나이트가 없습니다. (좌우 모두 나이트보다 높은 점수의 적 기물)'); return; }
       const sq = await api.pickSquare('변이시킬 아군 나이트를 고르세요', cands);
       if (sq == null) return;
@@ -409,7 +429,7 @@
 
   def('N11a', {
     async onGain(G, side, api) {
-      if (E.augCountFor(G, side, '나이트') < 2) { api.msg('N11a — 나이트를 2회 이상 강화하지 않아 발동하지 않았습니다.'); return; }
+      if (E.upgCountFor(G, side, '나이트') < 2) { api.msg('N11a — 나이트를 2회 이상 강화하지 않아 발동하지 않았습니다.'); return; }
       const ids = [];
       for (let k = 0; k < 2; k++) {
         const empties = [];
@@ -479,7 +499,7 @@
         const light = E.lightSquare(i);
         for (const j of adj(i)) {
           const p = G.bd[j];
-          if (p && p.color !== side && p.type !== 'k' && E.lightSquare(j) === light) {
+          if (p && p.color !== side && !E.protectedPiece(G, j) && E.lightSquare(j) === light) {
             if (E.removePiece(G, j, { by: side })) n++;
           }
         }
@@ -509,29 +529,50 @@
     }
   });
 
+  /* 판정은 한 번뿐(횟수제한). 결과를 flags[id+'Done'] 에 'fired' | 'miss' 로 남겨
+     카드가 '판정 끝' 을 보여 주고, 판정 순간에는 화면 가운데에 알린다 —
+     예전에는 조건이 안 맞으면 토스트 한 줄뿐이라 강화가 그냥 사라진 것처럼 보였다. */
   function parityPawn(parityIsOdd, id) {
+    const parityKo = parityIsOdd ? '홀수' : '짝수';
     return {
       async onGain(G, side) { sched(G, side, id, E.untilMyTurns(G, 1), {}); },
       async onSched(G, side, api) {
         const s = E.materialScore(G, side);
         const isOdd = s % 2 === 1;
-        if (isOdd !== parityIsOdd) { api.msg(`${id} — 기물점수 합 ${s} (조건 불일치, 발동하지 않음)`); return; }
+        if (isOdd !== parityIsOdd) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: `아군 기물 점수 합이 ${s}(${isOdd ? '홀수' : '짝수'})라 ${parityKo}가 아닙니다. 폰을 소환하지 않고 사라집니다.`, cls: 'spent' });
+          api.msg(`${id} — 기물점수 합 ${s} (${parityKo} 아님 · 불발)`);
+          return;
+        }
         const empties = emptyHome(G, side);
-        if (!empties.length) { api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`); return; }
+        if (!empties.length) {
+          G.flags[side][id + 'Done'] = 'miss';
+          api.event({ title: `${id} 불발`, body: '아군 진영에 빈칸이 없어 폰을 소환하지 못했습니다.', cls: 'spent' });
+          api.msg(`${id} — 아군 진영에 빈칸이 없습니다.`);
+          return;
+        }
         const sq = await api.pickSquare(`${id} — 폰을 소환할 아군 진영 빈칸을 고르세요 (기물점수 합 ${s})`, empties);
         if (sq == null) return;
         const p = E.mkPiece('p', side); p.moved = true;
         G.bd[sq] = p;
+        G.flags[side][id + 'Done'] = 'fired';
         api.reveal(id);
-        api.msg(`${id} — 기물점수 합이 ${parityIsOdd ? '홀' : '짝'}수(${s})라 폰을 소환했습니다.`);
+        api.event({ title: `${id} 발동 — 폰 소환`, body: `아군 기물 점수 합 ${s}(${parityKo}) → ${E.sqName(sq)} 에 폰을 소환했습니다.`, cls: 'mine' });
+        api.msg(`${id} — 기물점수 합이 ${parityKo}(${s})라 폰을 소환했습니다.`);
       }
     };
   }
+  // 카드에 '지금 점수 합 · 판정 상태' 를 적을 때 쓴다
+  global.parityStatus = function (G, side, id) {
+    const s = E.materialScore(G, side), odd = s % 2 === 1, want = id === 'B3a';
+    return { sum: s, odd, ok: odd === want, done: G.flags[side][id + 'Done'] || null };
+  };
   def('B3a', parityPawn(true, 'B3a'));
   def('B3b', parityPawn(false, 'B3b'));
 
   def('B3c', {
-    // 원문은 "방금 적을 처치한 비숍이". 이 증강을 열어준 처치도 game.js 의 grantAug 가
+    // 원문은 "방금 적을 처치한 비숍이". 이 강화를 열어준 처치도 game.js 의 grantUpg 가
     // 여기로 한 번 더 흘려보내 주므로, 그 비숍부터 지켜보게 된다.
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'b') return;
@@ -651,7 +692,7 @@
 
   def('B11c', {
     async onGain(G, side, api) {
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       if (!foes.length) { api.msg('대상이 없습니다.'); return; }
       const sq = await api.pickSquare('2턴 동안 살아남으면 강화가 사라질 상대 기물을 고르세요', foes, false, true);
       if (sq == null) return;
@@ -661,8 +702,8 @@
       const alive = E.piecesOf(G, opp(side)).some(i => G.bd[i].id === e.watchId);
       if (!alive) { api.msg('B11c — 지정 기물이 사라져 발동하지 않았습니다.'); return; }
       const ko = E.KO[e.watchType];
-      const lost = G.augs[opp(side)].filter(id => global.AUG_BY_ID[id].piece === ko);
-      G.augs[opp(side)] = G.augs[opp(side)].filter(id => global.AUG_BY_ID[id].piece !== ko);
+      const lost = G.upgs[opp(side)].filter(id => global.UPG_BY_ID[id].piece === ko);
+      G.upgs[opp(side)] = G.upgs[opp(side)].filter(id => global.UPG_BY_ID[id].piece !== ko);
       api.reveal('B11c');
       api.msg(`B11c — 상대의 ${ko} 강화 ${lost.length}개가 사라졌습니다.`);
     }
@@ -704,9 +745,9 @@
 
   def('Q3a', {
     async onGain(G, side, api) {
-      const n = G.augs.w.length + G.augs.b.length;
-      G.augs.w = []; G.augs.b = [];
-      G.eff = G.eff.filter(e => e.kind === 'sched' ? false : false);
+      const n = G.upgs.w.length + G.upgs.b.length;
+      G.upgs.w = []; G.upgs.b = [];
+      G.eff = [];                      // 강화에서 나온 효과도 전부 걷는다 (예약 포함)
       G.flags.w = {}; G.flags.b = {};
       api.msg(`Q3a — 양측의 모든 강화 ${n}개가 사라졌습니다. (이 강화 자신 포함)`);
     }
@@ -714,8 +755,8 @@
 
   def('Q3b', {
     /* 예전에는 '충전' 을 주고 다음 내 차례에 눌러 쓰게 했다.
-       그러면 증강을 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
-       다른 포영 증강처럼 증강을 얻는 그 턴에 바로 걸리게 한다. */
+       그러면 강화를 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
+       다른 포영 강화처럼 강화를 얻는 그 턴에 바로 걸리게 한다. */
     async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
@@ -729,7 +770,7 @@
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       const cands = [];
-      for (let i = 0; i < 64; i++) if (G.bd[i] && i !== q && G.bd[i].type !== 'k') cands.push(i);
+      for (let i = 0; i < 64; i++) if (i !== q && !E.protectedPiece(G, i)) cands.push(i);
       const sq = await api.pickSquare('퀸과 함께 포영시킬 기물을 고르세요', cands);
       const until = E.untilOppTurns(G, 1);
       E.phaseOut(G, q, until);
@@ -742,7 +783,7 @@
     async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
-      const foes = E.piecesOf(G, opp(side)).filter(i => G.bd[i].type !== 'k');
+      const foes = E.piecesOf(G, opp(side)).filter(i => !E.protectedPiece(G, i));
       if (!foes.length) { api.msg('대상이 없습니다.'); return; }
       const hi = Math.max(...foes.map(i => val(G.bd[i].type)));
       const tops = foes.filter(i => val(G.bd[i].type) === hi);
@@ -757,9 +798,9 @@
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
       const types = new Set();
-      for (const j of adj(q)) if (G.bd[j] && G.bd[j].type !== 'k') types.add(G.bd[j].type);
+      for (const j of adj(q)) if (!E.protectedPiece(G, j)) types.add(G.bd[j].type);
       const targets = [];
-      for (let i = 0; i < 64; i++) if (G.bd[i] && G.bd[i].type !== 'k' && types.has(G.bd[i].type)) targets.push(i);
+      for (let i = 0; i < 64; i++) if (!E.protectedPiece(G, i) && types.has(G.bd[i].type)) targets.push(i);
       const n = wipe(G, targets, side);
       E.removePiece(G, q, { force: true });
       api.msg(`Q11a — 인접 기물과 같은 종류의 기물 ${n}개를 제거하고 퀸도 함께 제거되었습니다.`);
@@ -780,7 +821,7 @@
         let n = 0;
         for (let i = 0; i < 64; i++) {
           const p = G.bd[i];
-          if (p && p.color !== side && p.type !== 'k' && within(i, e.sq, 2)) {
+          if (p && p.color !== side && !E.protectedPiece(G, i) && within(i, e.sq, 2)) {
             if (E.removePiece(G, i, { by: side })) n++;
           }
         }
@@ -809,13 +850,14 @@
     }
   });
 
-  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 강화에서 선택지를 2개 고릅니다.'); } });
+  // 다음 드래프트에서 '그 칸' 을 한 번 더 펼친다 — 3개 중 2개다 (game.js 의 runDrafts)
+  def('K1b', { async onGain(G, side, api) { G.flags[side].K1b = 1; api.msg('K1b — 다음 드래프트에서 그 칸의 선택지 중 2개를 고릅니다.'); } });
 
 
   function grantFrom(pieces, tier, label) {
     return {
       async onGain(G, side, api) {
-        const pool = global.AUGMENTS.filter(a => pieces.includes(a.piece) && a.tier === tier && !G.augs[side].includes(a.id));
+        const pool = global.UPGRADES.filter(a => pieces.includes(a.piece) && a.tier === tier && !G.upgs[side].includes(a.id));
         if (!pool.length) { api.msg(`${label} — 얻을 수 있는 강화가 없습니다.`); return; }
         const pick = await api.pickOption(`${label} — 추가로 얻을 강화를 고르세요`,
           pool.map(a => ({ label: `[${a.id}] ${a.piece} ${a.tier}개`, desc: a.text, value: a.id })));
@@ -859,12 +901,12 @@
 
   def('K6b', {
     async onGain(G, side, api) {
-      const eligible = global.PIECES_KO.filter(p => E.augCountFor(G, side, p) >= 2);
+      const eligible = global.PIECES_KO.filter(p => E.upgCountFor(G, side, p) >= 2);
       if (!eligible.length) { api.msg('K6b — 2회 이상 강화한 기물이 없습니다.'); return; }
       const ko = eligible.length === 1 ? eligible[0]
         : await api.pickOption('K6b — 추가 강화를 받을 기물을 고르세요', eligible.map(p => ({ label: p, value: p })));
       if (!ko) return;
-      const pool = global.AUGMENTS.filter(a => a.piece === ko && a.tier === 1 && !G.augs[side].includes(a.id));
+      const pool = global.UPGRADES.filter(a => a.piece === ko && a.tier === 1 && !G.upgs[side].includes(a.id));
       if (!pool.length) { api.msg('K6b — 남은 1개 티어 강화가 없습니다.'); return; }
       const pick = await api.pickOption(`${ko} 1개 티어 강화를 고르세요`,
         pool.map(a => ({ label: `[${a.id}]`, desc: a.text, value: a.id })));
@@ -875,21 +917,21 @@
 
   def('K6c', {
     async onGain(G, side, api) {
-      const owned = G.augs[side].filter(id => id !== 'K6c');
+      const owned = G.upgs[side].filter(id => id !== 'K6c');
       if (!owned.length) { api.msg('K6c — 교체할 강화가 없습니다.'); return; }
       const old = await api.pickOption('K6c — 교체할 강화를 고르세요',
         owned.map(id => {
-          const a = global.AUG_BY_ID[id];
+          const a = global.UPG_BY_ID[id];
           return { label: `[${id}] ${a.piece} ${a.tier}개`, desc: a.text, value: id };
         }));
       if (!old) return;
-      const oa = global.AUG_BY_ID[old];
-      const pool = global.AUGMENTS.filter(a => a.piece === oa.piece && a.tier === oa.tier && !G.augs[side].includes(a.id));
+      const oa = global.UPG_BY_ID[old];
+      const pool = global.UPGRADES.filter(a => a.piece === oa.piece && a.tier === oa.tier && !G.upgs[side].includes(a.id));
       if (!pool.length) { api.msg('K6c — 같은 기물·티어에 남은 강화가 없습니다.'); return; }
       const pick = await api.pickOption('새로 받을 강화를 고르세요',
         pool.map(a => ({ label: `[${a.id}]`, desc: a.text, value: a.id })));
       if (!pick) return;
-      G.augs[side] = G.augs[side].filter(x => x !== old);
+      G.upgs[side] = G.upgs[side].filter(x => x !== old);
       await api.grant(side, pick);
       api.msg(`K6c — [${old}] 를 [${pick}] 로 교체했습니다.`);
     }
@@ -922,23 +964,20 @@
       let n = 0;
       for (let i = 0; i < 64; i++) {
         const p = G.bd[i];
-        if (p && p.type !== 'k' && p.type !== 'p') { if (E.mutate(G, i, 'p')) n++; }
+        if (!E.protectedPiece(G, i) && p.type !== 'p') { if (E.mutate(G, i, 'p')) n++; }
       }
       api.msg(`K11c — 킹을 제외한 기물 ${n}개가 폰으로 변이했습니다.`);
     }
   });
 
   /* ═══════════ 지금 발동할 수 있는가 ═══════════
-     드래프트에서 "고를 수는 있는데 아무 일도 안 일어나는" 증강을 막는다.
+     드래프트에서 "고를 수는 있는데 아무 일도 안 일어나는" 강화를 막는다.
      null 을 돌려주면 선택 가능, 문자열을 돌려주면 그 이유로 잠긴다.
      기본 규칙(아래 defaultBlock)은 "해당 기물이 판에 없으면 잠금".        */
 
   function need(cond, why) { return cond ? null : why; }
 
   const BLOCK = {
-    // ── 폰 ──
-    P1a: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
-    P11b: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
     // ── 룩 ──
     R3a: (G, s) => need(ownSquares(G, s, 'r').length && ownSquares(G, s, 'p').length,
       '아군 룩과 폰이 모두 있어야 합니다'),
@@ -949,36 +988,26 @@
     R11b: (G, s) => need(
       E.piecesOf(G, s).some(i => !G.bd[i].moved && !'kr'.includes(G.bd[i].type)),
       '한 번도 움직이지 않은 기물이 없습니다'),
-    R11c: (G, s) => need(ownSquares(G, s, 'r').length, '아군 룩이 없습니다'),
     // ── 나이트 ──
     N1b: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, s, 'b').length,
       '아군 나이트와 비숍이 모두 있어야 합니다'),
     N3a: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, s, 'p').length,
       '아군 나이트와 폰이 모두 있어야 합니다'),
-    N3c: (G, s) => need(ownSquares(G, s, 'n').some(i => {
-      const [r, c] = rc(i);
-      if (!ok(r, c - 1) || !ok(r, c + 1)) return false;
-      const L = G.bd[idx(r, c - 1)], R = G.bd[idx(r, c + 1)];
-      return L && R && L.color !== s && R.color !== s
-        && L.type !== 'k' && R.type !== 'k' && val(L.type) > 3 && val(R.type) > 3;
-    }), '좌우가 모두 더 높은 점수의 적 기물인 나이트가 없습니다'),
+    N3c: (G, s) => need(n3cCands(G, s).length,
+      '좌우가 모두 더 높은 점수의 적 기물인 나이트가 없습니다'),
     N6b: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, opp(s), 'n').length,
       '양쪽에 나이트가 있어야 합니다'),
     N6c: (G, s) => need(
       ownSquares(G, s, 'n').length && E.piecesOf(G, opp(s)).some(i => !'kq'.includes(G.bd[i].type)),
       '아군 나이트와, 킹·퀸이 아닌 상대 기물이 필요합니다'),
-    N11a: (G, s) => need(E.augCountFor(G, s, '나이트') >= 2, '나이트를 2회 이상 강화해야 합니다'),
+    N11a: (G, s) => need(E.upgCountFor(G, s, '나이트') >= 2, '나이트를 2회 이상 강화해야 합니다'),
     N11c: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, opp(s), 'q').length,
       '아군 나이트와 상대 퀸이 모두 살아있어야 합니다'),
     // ── 비숍 ──
-    B1a: (G, s) => {
-      if (!ownSquares(G, s, 'b').length) return '아군 비숍이 없습니다';
-      return null;
-    },
     B1c: (G, s) => need(ownSquares(G, opp(s), 'p').length, '상대 폰이 없습니다'),
     B6b: (G, s) => need(E.piecesOf(G, opp(s)).some(i => !'kq'.includes(G.bd[i].type)),
       '킹·퀸이 아닌 상대 기물이 없습니다'),
-    B11c: (G, s) => need(E.piecesOf(G, opp(s)).some(i => G.bd[i].type !== 'k'),
+    B11c: (G, s) => need(E.piecesOf(G, opp(s)).some(i => !E.protectedPiece(G, i)),
       '지정할 상대 기물이 없습니다'),
     // ── 퀸 ──
     Q1b: (G, s) => need(ownSquares(G, s, 'q').length && ownSquares(G, opp(s), 'q').length,
@@ -987,30 +1016,25 @@
       '양쪽 퀸이 모두 살아있어야 합니다'),
     Q3a: () => null,                       // 강화가 없어도 '초기화'라는 효과는 성립
     Q6c: (G, s) => need(ownSquares(G, s, 'q').length
-      && E.piecesOf(G, opp(s)).some(i => G.bd[i].type !== 'k'),
+      && E.piecesOf(G, opp(s)).some(i => !E.protectedPiece(G, i)),
       '아군 퀸과 교환할 상대 기물이 필요합니다'),
-    Q11c: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
-    // ── 킹 (대부분 판 상태와 무관한 메타 증강) ──
+    // ── 킹 (대부분 판 상태와 무관한 메타 강화) ──
     K1a: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
-    K1b: () => null,
-    K1c: () => null,
     K3a: (G, s) => need(
-      global.AUGMENTS.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.augs[s].includes(a.id)),
+      global.UPGRADES.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.upgs[s].includes(a.id)),
       '얻을 수 있는 나이트·비숍 6개 강화가 없습니다'),
     K3b: (G, s) => need(E.materialScore(G, s) !== E.materialScore(G, opp(s)),
       '양측 기물 점수가 같아 배치할 수 없습니다'),
     K3c: (G, s) => need(
-      global.AUGMENTS.some(a => ['룩', '퀸'].includes(a.piece) && a.tier === 11 && !G.augs[s].includes(a.id)),
+      global.UPGRADES.some(a => ['룩', '퀸'].includes(a.piece) && a.tier === 11 && !G.upgs[s].includes(a.id)),
       '얻을 수 있는 룩·퀸 11개 강화가 없습니다'),
-    K6a: () => null,
-    K6b: (G, s) => need(global.PIECES_KO.some(p => E.augCountFor(G, s, p) >= 2),
+    K6b: (G, s) => need(global.PIECES_KO.some(p => E.upgCountFor(G, s, p) >= 2),
       '같은 기물을 2회 이상 강화하지 않았습니다'),
-    K6c: (G, s) => need(G.augs[s].some(id => {
-      const a = global.AUG_BY_ID[id];
-      return global.AUGMENTS.some(x => x.piece === a.piece && x.tier === a.tier && !G.augs[s].includes(x.id));
+    K6c: (G, s) => need(G.upgs[s].some(id => {
+      const a = global.UPG_BY_ID[id];
+      return global.UPGRADES.some(x => x.piece === a.piece && x.tier === a.tier && !G.upgs[s].includes(x.id));
     }), '교체할 수 있는 강화가 없습니다'),
     K11a: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
-    K11b: () => null,
     K11c: (G, s) => need(E.piecesOf(G, 'w').concat(E.piecesOf(G, 'b'))
       .some(i => !'kp'.includes(G.bd[i].type)), '폰으로 바꿀 기물이 없습니다'),
   };
@@ -1032,17 +1056,17 @@
   }
 
   // 잠금 사유를 돌려준다. null 이면 고를 수 있다.
-  global.augBlockReason = function (G, side, a) {
-    if (G.augs[side].includes(a.id)) return '이미 보유한 증강입니다';
+  global.upgBlockReason = function (G, side, a) {
+    if (G.upgs[side].includes(a.id)) return '이미 보유한 강화입니다';
     const f = BLOCK[a.id];
     if (f) { try { return f(G, side); } catch (e) { return null; } }
     return defaultBlock(G, side, a);
   };
 
-  /* ───────── 미구현 방지: 모든 증강에 빈 구현 보장 ───────── */
-  global.ensureAugImpls = function () {
+  /* ───────── 미구현 방지: 모든 강화에 빈 구현 보장 ───────── */
+  global.ensureUpgImpls = function () {
     const missing = [];
-    for (const a of global.AUGMENTS) if (!A[a.id]) { A[a.id] = {}; missing.push(a.id); }
+    for (const a of global.UPGRADES) if (!A[a.id]) { A[a.id] = {}; missing.push(a.id); }
     return missing;
   };
 })(window);

@@ -18,3 +18,8 @@ docs/원본_무제체스_증강표.xlsx
 
 # 로컬 도구 상태
 .omc/
+
+# 브라우저 테스트 의존성 (tools/test)
+node_modules/
+package-lock.json
+package.json

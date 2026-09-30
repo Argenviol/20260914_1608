@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>무제체스</title>
-<link rel="stylesheet" href="wds-tokens.css?v=1789367574">
-<link rel="stylesheet" href="style.css?v=1789367574">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="wds-tokens.css?v=1790748611">
+<link rel="stylesheet" href="style.css?v=1790748611">
 </head>
 <body>
 
@@ -14,7 +15,7 @@
   <div class="homeinner">
     <div class="homehead">
       <h1 class="hometitle">무제체스</h1>
-      <p class="homesub">기물을 처치할 때마다 증강을 골라 체스 규칙 자체를 바꿔갑니다</p>
+      <p class="homesub">기물을 처치할 때마다 강화를 골라 체스 규칙 자체를 바꿔갑니다</p>
     </div>
 
     <div class="homegrid">
@@ -33,6 +34,14 @@
             <button data-lv="normal" class="on"><b>중급</b><span>정석대로</span></button>
             <button data-lv="hard"><b>고급</b><span>진심으로</span></button>
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="ai-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn" id="h-ai">AI 대전 시작</button>
         </div>
 
@@ -45,9 +54,17 @@
             </div>
           </div>
           <div class="pvpnote">
-            비밀 증강도 서로에게 공개됩니다.<br>
+            비밀 강화도 서로에게 공개됩니다.<br>
             판 뒤집기로 진영을 바꿔가며 두세요.
           </div>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="pvp-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
           <button class="startbtn alt" id="h-pvp">2인 대전 시작</button>
         </div>
 
@@ -60,15 +77,14 @@
             </div>
           </div>
           <div class="onlineopt">
-            <label class="fld">제한시간
-              <select id="o-tc">
-                <option value="none">무제한</option>
-                <option value="3+2">3분 + 2초</option>
-                <option value="5+3">5분 + 3초</option>
-                <option value="10+5" selected>10분 + 5초</option>
-                <option value="20+10">20분 + 10초</option>
-              </select>
-            </label>
+          <div class="dlabel">제한시간</div>
+          <select class="tcsel" id="o-tc">
+            <option value="none">무제한</option>
+            <option value="3+2">3분 + 2초</option>
+            <option value="5+3" selected>5분 + 3초</option>
+            <option value="10+5">10분 + 5초</option>
+            <option value="20+10">20분 + 10초</option>
+          </select>
             <div class="colorpick" id="o-color">
               <span class="fldlabel">내 색</span>
               <button data-c="w" title="백으로 둡니다">♙ 백</button>
@@ -91,21 +107,12 @@
     </div>
 
     <div class="homefoot">
-      <label class="fld">제한시간
-        <select id="h-tc">
-          <option value="none">무제한</option>
-          <option value="3+2">3분 + 2초</option>
-          <option value="5+3">5분 + 3초</option>
-          <option value="10+5" selected>10분 + 5초</option>
-          <option value="20+10">20분 + 10초</option>
-        </select>
-      </label>
       <label class="fld vol">
         <button class="soundbtn" id="h-sound" title="소리 켜기/끄기">🔊</button>
         <input type="range" id="h-vol" min="0" max="100" value="75">
       </label>
       <div class="homelinks">
-        <button class="nav ghost" id="h-codex">증강 도감</button>
+        <button class="nav ghost" id="h-codex">강화 도감</button>
         <button class="nav ghost" id="h-rules">규칙 · 용어</button>
         <button class="nav ghost" id="h-theme">🌙 테마</button>
         <button class="nav ghost" id="h-stats" title="판이 끝나면 전적을 남깁니다">📝 전적 저장</button>
@@ -149,7 +156,7 @@
     </label>
     <button id="theme" class="iconbtn" title="라이트 / 다크 전환">🌙</button>
     <button id="flip" class="iconbtn" title="판 뒤집기">⇅</button>
-    <button id="codex" class="iconbtn" title="증강 도감">📖</button>
+    <button id="codex" class="iconbtn" title="강화 도감">📖</button>
     <button id="rules" class="iconbtn" title="규칙 · 용어">❓</button>
     <button id="resign" class="nav danger">항복</button>
     <button id="restart" class="nav">다시 시작</button>
@@ -165,18 +172,20 @@
     <div id="boardwrap">
       <div id="board"></div>
       <div id="endfx"></div>
+      <div id="oppdraft" hidden></div>
     </div>
 
     <div id="mystrip"></div>
   </section>
 
-  <!-- 오른쪽: 증강 / 효과 / 기록 한 패널 -->
+  <!-- 오른쪽: 강화 / 효과 / 기록 한 패널 -->
   <aside class="col side-col">
     <div id="lastmoves"></div>
     <div id="phased"></div>
+    <div id="oppdrafttimer" hidden></div>
     <div id="actions"></div>
     <div id="tabs">
-      <button data-tab="aug" class="on">증강</button>
+      <button data-tab="upg" class="on">강화</button>
       <button data-tab="eff">활성 효과</button>
       <button data-tab="log">진행 기록</button>
       <button data-tab="chat" id="tab-chat" hidden>대화</button>
@@ -200,15 +209,15 @@
 
 <div id="dragghost"></div>
 
-<script src="src/data.js?v=1789367574"></script>
-<script src="src/sfx.js?v=1789367574"></script>
-<script src="src/engine.js?v=1789367574"></script>
-<script src="src/augments.js?v=1789367574"></script>
-<script src="src/ai.js?v=1789367574"></script>
-<script src="src/net.js?v=1789367574"></script>
-<script src="src/stats.js?v=1789367574"></script>
-<script src="src/account.js?v=1789367574"></script>
-<script src="src/game.js?v=1789367574"></script>
-<script src="src/ui.js?v=1789367574"></script>
+<script src="src/data.js?v=1790748611"></script>
+<script src="src/sfx.js?v=1790748611"></script>
+<script src="src/engine.js?v=1790748611"></script>
+<script src="src/upgrades.js?v=1790748611"></script>
+<script src="src/ai.js?v=1790748611"></script>
+<script src="src/net.js?v=1790748611"></script>
+<script src="src/stats.js?v=1790748611"></script>
+<script src="src/account.js?v=1790748611"></script>
+<script src="src/game.js?v=1790748611"></script>
+<script src="src/ui.js?v=1790748611"></script>
 </body>
 </html>
