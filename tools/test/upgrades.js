@@ -1,4 +1,4 @@
-/* 증강 72종 발동 감사 — 각 증강의 조건이 성립하는 판을 만들고, 훅이 실제로 무언가를 바꾸는지 본다.
+/* 강화 72종 발동 감사 — 각 강화의 조건이 성립하는 판을 만들고, 훅이 실제로 무언가를 바꾸는지 본다.
    2인 대전 한 화면. 프롬프트는 전부 첫 번째 선택지로 자동 응답. 드래프트는 tierIdx 를 끝으로 밀어 막는다. */
 const H = require('./harness');
 (async () => {
@@ -29,14 +29,14 @@ const H = require('./harness');
         G.tierIdx = { w: 4, b: 4 };          // 드래프트가 끼어들지 않게
         G.clock = null;
         Game.G = G; Game.mode = 'pvp'; Game.busy = false; Game.clockPaused = false;
-        Game.augNotes = { w: {}, b: {} };
+        Game.upgNotes = { w: {}, b: {} };
         T.msgs = [];
         renderAll();
         return G;
       },
       board() { return Game.G.bd.map(p => p ? p.type + p.color : '.').join(''); },
       at(n) { const p = Game.G.bd[T.sq(n)]; return p ? p.type + p.color : null; },
-      async grant(side, id) { await Game.grantAug(side, id); },
+      async grant(side, id) { await Game.grantUpg(side, id); },
       async play(from, to, promo) {
         const ms = Game.legalFor(T.sq(from)).filter(m => m.to === T.sq(to) && (!promo || m.promo === promo));
         if (!ms.length) throw new Error(from + '→' + to + ' 합법수 아님 (turn ' + Game.G.turn + ')');
@@ -59,17 +59,17 @@ const H = require('./harness');
         const r = options.filter(o => o.value !== null && !o.block); return r.length ? r[0].value : null;
       },
       async confirm(prompt) { T.msgs.push('confirm: ' + prompt); return true; },
-      async draft(o) { const p = o.offer.filter(x => !x.block); return p.length ? p[0].aug.id : null; },
+      async draft(o) { const p = o.offer.filter(x => !x.block); return p.length ? p[0].upg.id : null; },
       flash() { }, announce() { }, remoteFx() { },
       event(e) { T.msgs.push('event: ' + e.title); },
       msg(t) { T.msgs.push('msg: ' + t); },
-      reveal: (id) => Game.revealAug(id),
-      grant: (s, id) => Game.grantAug(s, id),
+      reveal: (id) => Game.revealUpg(id),
+      grant: (s, id) => Game.grantUpg(s, id),
     };
     Game.onUpdate = () => { };
   });
 
-  // ── 시나리오 ──  (백이 증강 주인. FEN 은 8랭크부터)
+  // ── 시나리오 ──  (백이 강화 주인. FEN 은 8랭크부터)
   const S = [
     // 폰
     { id: 'P1a', fen: '4k3/8/8/8/8/8/4P3/4K3', ok: 'T.effs().includes("untargetable")' },
@@ -92,7 +92,7 @@ const H = require('./harness');
        R1c 는 처치한 룩과 지정한 상대 기물을 함께 지정불가로 만드는데, 그 룩이 R3c 면 룩은 빠져야 한다. */
     { id: 'R1c', fen: '4k2n/8/8/8/8/8/R2p4/4K3', act: 'await T.play("a2","d2")',
       ok: '(() => { const rid = Game.G.bd[T.sq("d2")].id; const e = Game.G.eff.filter(x => x.kind === "untargetable"); return e.length === 1 && e[0].ids.includes(rid); })()' },
-    { id: 'R1c', fen: '4k2n/8/8/8/8/8/R2p4/4K3', pre: 'Game.G.augs.w.push("R3c")', act: 'await T.play("a2","d2")',
+    { id: 'R1c', fen: '4k2n/8/8/8/8/8/R2p4/4K3', pre: 'Game.G.upgs.w.push("R3c")', act: 'await T.play("a2","d2")',
       ok: '(() => { const rid = Game.G.bd[T.sq("d2")].id; const e = Game.G.eff.filter(x => x.kind === "untargetable"); return e.length === 1 && !e[0].ids.includes(rid) && e[0].ids.length === 1; })()' },
     { id: 'R3a', fen: '4k3/8/8/8/8/8/R3P3/4K3', ok: 'T.legal("e2").includes("h2")' },
     { id: 'R3b', fen: '4k3/8/n7/8/8/8/R2n4/4K3', act: 'await T.play("a2","d2")', ok: 'Game.G.phased.length === 1 && T.at("a6") === null' },
@@ -113,7 +113,7 @@ const H = require('./harness');
     { id: 'N6a', fen: '4k3/8/8/8/8/8/1p6/1N2K3', act: 'await T.play("b1","c3")', ok: 'Game.G.phased.length === 1' },
     { id: 'N6b', fen: '4k2n/8/8/8/8/8/8/1N2K3', act: 'await T.play("e1","d1"); await T.play("e8","d8")', ok: 'T.at("h8") === null && Game.G.kills.w === 1' },
     { id: 'N6c', fen: '4k3/p7/8/8/8/8/8/1N2K3', ok: 'T.at("a7") === "nw" && T.at("b1") === null' },
-    { id: 'N11a', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.augs.w.push("N1a","N3b")', ok: 'Engine.piecesOf(Game.G,"w","n").length === 3' },
+    { id: 'N11a', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.upgs.w.push("N1a","N3b")', ok: 'Engine.piecesOf(Game.G,"w","n").length === 3' },
     { id: 'N11b', fen: '4k3/8/8/8/8/8/8/1N2K3', ok: 'T.legal("b1").includes("d5")' },
     { id: 'N11c', fen: '3qk3/8/8/8/8/8/8/1N2K3', ok: 'T.at("d8") === null && T.at("b1") === null' },
     // 비숍 (비밀)
@@ -133,12 +133,12 @@ const H = require('./harness');
     { id: 'B6c', fen: '4k3/8/8/8/1p6/2p5/1p6/B3K3', act: 'await T.play("a1","b2")', ok: 'T.at("c3") === null' },
     { id: 'B11a', fen: '4k3/8/8/8/8/7r/8/2B1K3', act: 'await T.play("e1","d1"); await T.play("h3","h1")', ok: 'T.effs().includes("untargetable")' },
     { id: 'B11b', fen: '4k3/8/8/8/8/8/8/2B1K3', ok: 'T.effs().includes("bishopAsQueen") && T.legal("c1").includes("c8")' },
-    { id: 'B11c', fen: '4k3/8/8/8/8/8/8/n1B1K3', pre: 'Game.G.augs.b.push("N1a")', act: 'await T.play("e1","d1"); await T.play("e8","d8"); await T.play("d1","e1"); await T.play("d8","e8")', ok: '!Game.G.augs.b.includes("N1a")' },
+    { id: 'B11c', fen: '4k3/8/8/8/8/8/8/n1B1K3', pre: 'Game.G.upgs.b.push("N1a")', act: 'await T.play("e1","d1"); await T.play("e8","d8"); await T.play("d1","e1"); await T.play("d8","e8")', ok: '!Game.G.upgs.b.includes("N1a")' },
     // 퀸
     { id: 'Q1a', fen: '4k3/8/8/8/8/8/8/3QK3', act: 'await T.play("d1","a1"); await T.play("e8","d8")', ok: 'T.legal("a1").includes("h8")' },
     { id: 'Q1b', fen: '3qk3/8/8/8/8/8/8/3QK3', ok: 'T.effs().includes("untargetable")' },
     { id: 'Q1c', fen: '3qk3/8/8/8/8/8/8/3QK3', ok: 'T.at("d1") === null && T.at("d8") === null' },
-    { id: 'Q3a', fen: '4k3/8/8/8/8/8/8/3QK3', pre: 'Game.G.augs.w.push("P1b"); Game.G.augs.b.push("N1a")', ok: 'Game.G.augs.w.length === 0 && Game.G.augs.b.length === 0' },
+    { id: 'Q3a', fen: '4k3/8/8/8/8/8/8/3QK3', pre: 'Game.G.upgs.w.push("P1b"); Game.G.upgs.b.push("N1a")', ok: 'Game.G.upgs.w.length === 0 && Game.G.upgs.b.length === 0' },
     { id: 'Q3b', fen: '4k3/8/8/8/8/8/8/3QK3', ok: 'Game.G.phased.length === 1' },
     { id: 'Q3c', fen: '4k3/8/8/8/8/8/8/3QK2r', act: 'await T.play("e1","e2"); await T.play("h1","d1")', ok: 'Game.G.kills.b === 0' },
     { id: 'Q6a', fen: '4k3/8/8/8/8/8/8/1NQ1K3', ok: 'Game.G.phased.length === 2' },
@@ -153,17 +153,17 @@ const H = require('./harness');
     /* K1b 는 '다른 칸을 한 번 더' 가 아니라 '그 칸의 3개 중 2개' 다.
        tierIdx 를 되돌려 드래프트를 실제로 열고, 나이트로 처치해 나이트 1개 칸을 펼친다.
        K1b 를 뺀 나머지 둘이 모두 N1* 이어야 같은 칸에서 두 개를 고른 것이다. */
-    { id: 'K1b', fen: '4k3/8/8/3p4/8/2N5/8/4K3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("c3","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 2 && a.every(x => x.slice(0, 2) === "N1"); })()' },
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/2N5/8/4K3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("c3","d5")', ok: '(() => { const a = Game.G.upgs.w.filter(x => x !== "K1b"); return a.length === 2 && a.every(x => x.slice(0, 2) === "N1"); })()' },
     /* 같은 칸의 남은 둘이 다 잠겨 있으면 두 번째는 없다 — 다른 기물 칸으로 넘어가면 안 된다.
        흑 퀸이 없으면 퀸 1개 칸에서 Q1b·Q1c 가 잠기므로 고를 수 있는 건 Q1a 하나뿐이다. */
-    { id: 'K1b', fen: '4k3/8/8/3p4/8/8/8/3QK3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("d1","d5")', ok: '(() => { const a = Game.G.augs.w.filter(x => x !== "K1b"); return a.length === 1 && a[0] === "Q1a"; })()' },
+    { id: 'K1b', fen: '4k3/8/8/3p4/8/8/8/3QK3', pre: 'Game.G.tierIdx = { w: 0, b: 0 }', act: 'await T.play("d1","d5")', ok: '(() => { const a = Game.G.upgs.w.filter(x => x !== "K1b"); return a.length === 1 && a[0] === "Q1a"; })()' },
     { id: 'K1c', fen: '4k3/8/8/8/8/8/8/4K3', pre: 'Game.G.bd[T.sq("a1")] = Engine.mkPiece("p","b")', act: 'Engine.removePiece(Game.G, T.sq("a1"), { by: "w" })', ok: 'Game.G.kills.w === 1' },
-    { id: 'K3a', fen: '4k3/8/8/8/8/8/8/1NB1K3', ok: 'Game.G.augs.w.length === 2' },
+    { id: 'K3a', fen: '4k3/8/8/8/8/8/8/1NB1K3', ok: 'Game.G.upgs.w.length === 2' },
     { id: 'K3b', fen: '4k3/8/8/8/8/8/8/1N2K3', ok: 'Engine.piecesOf(Game.G,"w").length >= 3' },
-    { id: 'K3c', fen: '4k3/8/8/8/8/8/8/R2QK3', ok: 'Game.G.augs.w.length === 2' },
+    { id: 'K3c', fen: '4k3/8/8/8/8/8/8/R2QK3', ok: 'Game.G.upgs.w.length === 2' },
     { id: 'K6a', fen: '4k3/8/8/8/8/8/8/1N2K3', act: 'await T.play("b1","c3")', ok: 'T.at("e1") === null && T.flags("w").K6a === 0' },
-    { id: 'K6b', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.augs.w.push("N1a","N3b")', ok: 'Game.G.augs.w.length === 4' },
-    { id: 'K6c', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.augs.w.push("N1a")', ok: '!Game.G.augs.w.includes("N1a") && Game.G.augs.w.length === 2' },
+    { id: 'K6b', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.upgs.w.push("N1a","N3b")', ok: 'Game.G.upgs.w.length === 4' },
+    { id: 'K6c', fen: '4k3/8/8/8/8/8/8/1N2K3', pre: 'Game.G.upgs.w.push("N1a")', ok: '!Game.G.upgs.w.includes("N1a") && Game.G.upgs.w.length === 2' },
     { id: 'K11a', fen: '4k3/8/8/8/8/8/4P3/4K3', ok: 'Game.activatable("w").includes("K11a")', act2: 'await Game.activate("K11a")', ok2: 'T.at("e2") === null && Engine.piecesOf(Game.G,"w","p").length === 1' },
     { id: 'K11b', fen: '3NkN2/8/4P3/8/8/8/8/4K3', act: 'await T.play("e6","e7")', ok: 'Game.G.result && Game.G.result.winner === "w"' },
     { id: 'K11c', fen: '4k3/8/8/8/8/8/8/1NBQK3', ok: 'T.at("b1") === "pw" && T.at("d1") === "pw"' },

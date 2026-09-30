@@ -4,7 +4,7 @@
    정적 사이트라 브라우저에 넣은 키는 누구나 볼 수 있어서, 키는 서버에만 둔다.
 
    단위는 '한 판' 이 아니라 '한 사람이 겪은 한 판' 이다.
-   온라인에서는 상대의 비밀 증강이 내 화면에 가면으로만 오므로 상대 줄을 대신 쓸 수 없다.
+   온라인에서는 상대의 비밀 강화가 내 화면에 가면으로만 오므로 상대 줄을 대신 쓸 수 없다.
    그래서 각자 자기 것만 보낸다 — 두 컴퓨터가 대국 id 를 맞출 필요도 없어진다. */
 (function (global) {
   'use strict';
@@ -87,7 +87,7 @@
     if (victimType) p.kills[type] = (p.kills[type] || 0) + 1;
   };
 
-  /** 증강을 고른 순간. 안 고르고 지나간 경우(chosen 없음)도 남긴다. */
+  /** 강화를 고른 순간. 안 고르고 지나간 경우(chosen 없음)도 남긴다. */
   Stats.picked = function (o) {
     const meta = pendingMeta; pendingMeta = null;
     if (!cur || cur.picks.length >= 40) return;
@@ -96,8 +96,8 @@
       ply: o.ply | 0,
       tier: o.tier | 0,
       piece: o.piece || null,
-      offered: (o.offer || []).map(x => x.aug.id),
-      blocked: (o.offer || []).filter(x => x.block).map(x => x.aug.id),
+      offered: (o.offer || []).map(x => x.upg.id),
+      blocked: (o.offer || []).filter(x => x.block).map(x => x.upg.id),
       chosen: o.chosen || null,
       think_ms: meta ? Math.max(0, meta.thinkMs | 0) : null,
       auto: meta ? !!meta.auto : false,
@@ -136,7 +136,7 @@
     if (!Stats.enabled()) return;
 
     const dur = Date.now() - c.startedAt;
-    // 온라인은 내 것만. 상대의 비밀 증강을 내가 모르니 상대 줄을 대신 쓸 수 없다.
+    // 온라인은 내 것만. 상대의 비밀 강화를 내가 모르니 상대 줄을 대신 쓸 수 없다.
     const sides = (c.mode === 'online')
       ? (c.mySide ? [c.mySide] : [])
       : ['w', 'b'];
@@ -164,7 +164,7 @@
         kills: G.kills[side] | 0,
         opp_kills: G.kills[opp] | 0,
         tier_reached: G.tierIdx[side] | 0,
-        augs: (G.augs[side] || []).slice(),
+        augs: (G.upgs[side] || []).slice(),   // 키는 수퍼베이스 plays.augs 열 이름이라 그대로 둔다
         piece_moves: c.per[side].moves,
         piece_kills: c.per[side].kills,
       };

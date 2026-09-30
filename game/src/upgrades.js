@@ -1,8 +1,8 @@
 /* ============================================================
-   무제체스 - 증강 구현 (72종)
+   무제체스 - 강화 구현 (72종)
 
    훅
-     onGain(G, side, api)          증강 획득 즉시
+     onGain(G, side, api)          강화 획득 즉시
      onCapture(G, side, api, ctx)  처치 발생 시  ctx={to, mover, victim, victimSq}
      onAfterMove(G, side, api, ctx) 이동 완료 후 ctx={move, mover}
      onTurnStart(G, side, api)     자신의 턴 시작
@@ -16,7 +16,7 @@
   'use strict';
   const E = global.Engine;
   const A = {};                       // 구현 레지스트리
-  global.AugImpl = A;
+  global.UpgImpl = A;
 
   /* ───────── 공용 헬퍼 ───────── */
   const opp = E.other;
@@ -301,7 +301,7 @@
   def('N1c', {
     async onGain(G, side) { G.flags[side].N1c = 1; },
     async onCapture(G, side, api, ctx) {
-      // 이 증강을 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
+      // 이 강화를 열어 준 바로 그 처치에는 걸리지 않는다. 다음 처치부터다.
       if (ctx.regrant) return;
       if (ctx.mover.type !== 'n') return;
       if (!(G.flags[side].N1c > 0)) return;
@@ -429,7 +429,7 @@
 
   def('N11a', {
     async onGain(G, side, api) {
-      if (E.augCountFor(G, side, '나이트') < 2) { api.msg('N11a — 나이트를 2회 이상 강화하지 않아 발동하지 않았습니다.'); return; }
+      if (E.upgCountFor(G, side, '나이트') < 2) { api.msg('N11a — 나이트를 2회 이상 강화하지 않아 발동하지 않았습니다.'); return; }
       const ids = [];
       for (let k = 0; k < 2; k++) {
         const empties = [];
@@ -531,7 +531,7 @@
 
   /* 판정은 한 번뿐(횟수제한). 결과를 flags[id+'Done'] 에 'fired' | 'miss' 로 남겨
      카드가 '판정 끝' 을 보여 주고, 판정 순간에는 화면 가운데에 알린다 —
-     예전에는 조건이 안 맞으면 토스트 한 줄뿐이라 증강이 그냥 사라진 것처럼 보였다. */
+     예전에는 조건이 안 맞으면 토스트 한 줄뿐이라 강화가 그냥 사라진 것처럼 보였다. */
   function parityPawn(parityIsOdd, id) {
     const parityKo = parityIsOdd ? '홀수' : '짝수';
     return {
@@ -572,7 +572,7 @@
   def('B3b', parityPawn(false, 'B3b'));
 
   def('B3c', {
-    // 원문은 "방금 적을 처치한 비숍이". 이 증강을 열어준 처치도 game.js 의 grantAug 가
+    // 원문은 "방금 적을 처치한 비숍이". 이 강화를 열어준 처치도 game.js 의 grantUpg 가
     // 여기로 한 번 더 흘려보내 주므로, 그 비숍부터 지켜보게 된다.
     async onCapture(G, side, api, ctx) {
       if (ctx.mover.type !== 'b') return;
@@ -702,8 +702,8 @@
       const alive = E.piecesOf(G, opp(side)).some(i => G.bd[i].id === e.watchId);
       if (!alive) { api.msg('B11c — 지정 기물이 사라져 발동하지 않았습니다.'); return; }
       const ko = E.KO[e.watchType];
-      const lost = G.augs[opp(side)].filter(id => global.AUG_BY_ID[id].piece === ko);
-      G.augs[opp(side)] = G.augs[opp(side)].filter(id => global.AUG_BY_ID[id].piece !== ko);
+      const lost = G.upgs[opp(side)].filter(id => global.UPG_BY_ID[id].piece === ko);
+      G.upgs[opp(side)] = G.upgs[opp(side)].filter(id => global.UPG_BY_ID[id].piece !== ko);
       api.reveal('B11c');
       api.msg(`B11c — 상대의 ${ko} 강화 ${lost.length}개가 사라졌습니다.`);
     }
@@ -745,8 +745,8 @@
 
   def('Q3a', {
     async onGain(G, side, api) {
-      const n = G.augs.w.length + G.augs.b.length;
-      G.augs.w = []; G.augs.b = [];
+      const n = G.upgs.w.length + G.upgs.b.length;
+      G.upgs.w = []; G.upgs.b = [];
       G.eff = [];                      // 강화에서 나온 효과도 전부 걷는다 (예약 포함)
       G.flags.w = {}; G.flags.b = {};
       api.msg(`Q3a — 양측의 모든 강화 ${n}개가 사라졌습니다. (이 강화 자신 포함)`);
@@ -755,8 +755,8 @@
 
   def('Q3b', {
     /* 예전에는 '충전' 을 주고 다음 내 차례에 눌러 쓰게 했다.
-       그러면 증강을 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
-       다른 포영 증강처럼 증강을 얻는 그 턴에 바로 걸리게 한다. */
+       그러면 강화를 고른 뒤 상대 턴이 한 번 끼어서, 정작 지키려던 퀸이 그 사이에 잡혔다.
+       다른 포영 강화처럼 강화를 얻는 그 턴에 바로 걸리게 한다. */
     async onGain(G, side, api) {
       const q = ownSquares(G, side, 'q')[0];
       if (q === undefined) { api.msg('아군 퀸이 없습니다.'); return; }
@@ -857,7 +857,7 @@
   function grantFrom(pieces, tier, label) {
     return {
       async onGain(G, side, api) {
-        const pool = global.AUGMENTS.filter(a => pieces.includes(a.piece) && a.tier === tier && !G.augs[side].includes(a.id));
+        const pool = global.UPGRADES.filter(a => pieces.includes(a.piece) && a.tier === tier && !G.upgs[side].includes(a.id));
         if (!pool.length) { api.msg(`${label} — 얻을 수 있는 강화가 없습니다.`); return; }
         const pick = await api.pickOption(`${label} — 추가로 얻을 강화를 고르세요`,
           pool.map(a => ({ label: `[${a.id}] ${a.piece} ${a.tier}개`, desc: a.text, value: a.id })));
@@ -901,12 +901,12 @@
 
   def('K6b', {
     async onGain(G, side, api) {
-      const eligible = global.PIECES_KO.filter(p => E.augCountFor(G, side, p) >= 2);
+      const eligible = global.PIECES_KO.filter(p => E.upgCountFor(G, side, p) >= 2);
       if (!eligible.length) { api.msg('K6b — 2회 이상 강화한 기물이 없습니다.'); return; }
       const ko = eligible.length === 1 ? eligible[0]
         : await api.pickOption('K6b — 추가 강화를 받을 기물을 고르세요', eligible.map(p => ({ label: p, value: p })));
       if (!ko) return;
-      const pool = global.AUGMENTS.filter(a => a.piece === ko && a.tier === 1 && !G.augs[side].includes(a.id));
+      const pool = global.UPGRADES.filter(a => a.piece === ko && a.tier === 1 && !G.upgs[side].includes(a.id));
       if (!pool.length) { api.msg('K6b — 남은 1개 티어 강화가 없습니다.'); return; }
       const pick = await api.pickOption(`${ko} 1개 티어 강화를 고르세요`,
         pool.map(a => ({ label: `[${a.id}]`, desc: a.text, value: a.id })));
@@ -917,21 +917,21 @@
 
   def('K6c', {
     async onGain(G, side, api) {
-      const owned = G.augs[side].filter(id => id !== 'K6c');
+      const owned = G.upgs[side].filter(id => id !== 'K6c');
       if (!owned.length) { api.msg('K6c — 교체할 강화가 없습니다.'); return; }
       const old = await api.pickOption('K6c — 교체할 강화를 고르세요',
         owned.map(id => {
-          const a = global.AUG_BY_ID[id];
+          const a = global.UPG_BY_ID[id];
           return { label: `[${id}] ${a.piece} ${a.tier}개`, desc: a.text, value: id };
         }));
       if (!old) return;
-      const oa = global.AUG_BY_ID[old];
-      const pool = global.AUGMENTS.filter(a => a.piece === oa.piece && a.tier === oa.tier && !G.augs[side].includes(a.id));
+      const oa = global.UPG_BY_ID[old];
+      const pool = global.UPGRADES.filter(a => a.piece === oa.piece && a.tier === oa.tier && !G.upgs[side].includes(a.id));
       if (!pool.length) { api.msg('K6c — 같은 기물·티어에 남은 강화가 없습니다.'); return; }
       const pick = await api.pickOption('새로 받을 강화를 고르세요',
         pool.map(a => ({ label: `[${a.id}]`, desc: a.text, value: a.id })));
       if (!pick) return;
-      G.augs[side] = G.augs[side].filter(x => x !== old);
+      G.upgs[side] = G.upgs[side].filter(x => x !== old);
       await api.grant(side, pick);
       api.msg(`K6c — [${old}] 를 [${pick}] 로 교체했습니다.`);
     }
@@ -971,7 +971,7 @@
   });
 
   /* ═══════════ 지금 발동할 수 있는가 ═══════════
-     드래프트에서 "고를 수는 있는데 아무 일도 안 일어나는" 증강을 막는다.
+     드래프트에서 "고를 수는 있는데 아무 일도 안 일어나는" 강화를 막는다.
      null 을 돌려주면 선택 가능, 문자열을 돌려주면 그 이유로 잠긴다.
      기본 규칙(아래 defaultBlock)은 "해당 기물이 판에 없으면 잠금".        */
 
@@ -1000,7 +1000,7 @@
     N6c: (G, s) => need(
       ownSquares(G, s, 'n').length && E.piecesOf(G, opp(s)).some(i => !'kq'.includes(G.bd[i].type)),
       '아군 나이트와, 킹·퀸이 아닌 상대 기물이 필요합니다'),
-    N11a: (G, s) => need(E.augCountFor(G, s, '나이트') >= 2, '나이트를 2회 이상 강화해야 합니다'),
+    N11a: (G, s) => need(E.upgCountFor(G, s, '나이트') >= 2, '나이트를 2회 이상 강화해야 합니다'),
     N11c: (G, s) => need(ownSquares(G, s, 'n').length && ownSquares(G, opp(s), 'q').length,
       '아군 나이트와 상대 퀸이 모두 살아있어야 합니다'),
     // ── 비숍 ──
@@ -1018,21 +1018,21 @@
     Q6c: (G, s) => need(ownSquares(G, s, 'q').length
       && E.piecesOf(G, opp(s)).some(i => !E.protectedPiece(G, i)),
       '아군 퀸과 교환할 상대 기물이 필요합니다'),
-    // ── 킹 (대부분 판 상태와 무관한 메타 증강) ──
+    // ── 킹 (대부분 판 상태와 무관한 메타 강화) ──
     K1a: (G, s) => need(ownSquares(G, s, 'q').length, '아군 퀸이 없습니다'),
     K3a: (G, s) => need(
-      global.AUGMENTS.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.augs[s].includes(a.id)),
+      global.UPGRADES.some(a => ['나이트', '비숍'].includes(a.piece) && a.tier === 6 && !G.upgs[s].includes(a.id)),
       '얻을 수 있는 나이트·비숍 6개 강화가 없습니다'),
     K3b: (G, s) => need(E.materialScore(G, s) !== E.materialScore(G, opp(s)),
       '양측 기물 점수가 같아 배치할 수 없습니다'),
     K3c: (G, s) => need(
-      global.AUGMENTS.some(a => ['룩', '퀸'].includes(a.piece) && a.tier === 11 && !G.augs[s].includes(a.id)),
+      global.UPGRADES.some(a => ['룩', '퀸'].includes(a.piece) && a.tier === 11 && !G.upgs[s].includes(a.id)),
       '얻을 수 있는 룩·퀸 11개 강화가 없습니다'),
-    K6b: (G, s) => need(global.PIECES_KO.some(p => E.augCountFor(G, s, p) >= 2),
+    K6b: (G, s) => need(global.PIECES_KO.some(p => E.upgCountFor(G, s, p) >= 2),
       '같은 기물을 2회 이상 강화하지 않았습니다'),
-    K6c: (G, s) => need(G.augs[s].some(id => {
-      const a = global.AUG_BY_ID[id];
-      return global.AUGMENTS.some(x => x.piece === a.piece && x.tier === a.tier && !G.augs[s].includes(x.id));
+    K6c: (G, s) => need(G.upgs[s].some(id => {
+      const a = global.UPG_BY_ID[id];
+      return global.UPGRADES.some(x => x.piece === a.piece && x.tier === a.tier && !G.upgs[s].includes(x.id));
     }), '교체할 수 있는 강화가 없습니다'),
     K11a: (G, s) => need(ownSquares(G, s, 'p').length, '아군 폰이 없습니다'),
     K11c: (G, s) => need(E.piecesOf(G, 'w').concat(E.piecesOf(G, 'b'))
@@ -1056,17 +1056,17 @@
   }
 
   // 잠금 사유를 돌려준다. null 이면 고를 수 있다.
-  global.augBlockReason = function (G, side, a) {
-    if (G.augs[side].includes(a.id)) return '이미 보유한 증강입니다';
+  global.upgBlockReason = function (G, side, a) {
+    if (G.upgs[side].includes(a.id)) return '이미 보유한 강화입니다';
     const f = BLOCK[a.id];
     if (f) { try { return f(G, side); } catch (e) { return null; } }
     return defaultBlock(G, side, a);
   };
 
-  /* ───────── 미구현 방지: 모든 증강에 빈 구현 보장 ───────── */
-  global.ensureAugImpls = function () {
+  /* ───────── 미구현 방지: 모든 강화에 빈 구현 보장 ───────── */
+  global.ensureUpgImpls = function () {
     const missing = [];
-    for (const a of global.AUGMENTS) if (!A[a.id]) { A[a.id] = {}; missing.push(a.id); }
+    for (const a of global.UPGRADES) if (!A[a.id]) { A[a.id] = {}; missing.push(a.id); }
     return missing;
   };
 })(window);

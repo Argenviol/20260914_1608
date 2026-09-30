@@ -110,20 +110,20 @@
       tone(880, t, 0.11, 'square', 0.16);
       tone(1175, t + 0.10, 0.14, 'square', 0.16);
     },
-    // 증강 카드가 열림
+    // 강화 카드가 열림
     draft() {
       const t = now();
       [392, 523, 659, 880].forEach((f, i) => tone(f, t + i * 0.07, 0.30, 'sine', 0.16));
     },
-    // 증강 발동 — 반짝이는 소리
-    augment() {
+    // 강화 발동 — 반짝이는 소리
+    upgrade() {
       const t = now();
       tone(1320, t, 0.10, 'triangle', 0.14);
       tone(1760, t + 0.06, 0.14, 'triangle', 0.12);
       tone(2637, t + 0.12, 0.18, 'sine', 0.08);
     },
-    // 상대가 증강을 얻음 — 낮고 불길하게
-    enemyAugment() {
+    // 상대가 강화를 얻음 — 낮고 불길하게
+    enemyUpgrade() {
       const t = now();
       tone(330, t, 0.18, 'sawtooth', 0.10, 247);
       tone(165, t + 0.05, 0.24, 'triangle', 0.12);

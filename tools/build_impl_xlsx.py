@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""증강 '구현표' 엑셀 생성.
+"""강화 '구현표' 엑셀 생성.
 
-손으로 적지 않고 game/src/augments.js 를 직접 읽어서
- - 각 증강이 어떤 훅으로 구현됐는지
+손으로 적지 않고 game/src/upgrades.js 를 직접 읽어서
+ - 각 강화가 어떤 훅으로 구현됐는지
  - 어떤 조건에서 잠기는지(발동 불가)
 를 뽑아낸다. 코드가 바뀌면 다시 돌리면 된다.
 
-  python build_impl_xlsx.py   ->  docs/무제체스_증강_구현표.xlsx
+  python build_impl_xlsx.py   ->  docs/무제체스_강화_구현표.xlsx
 """
 import io
 import os
@@ -15,11 +15,11 @@ import re
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from augment_data import AUGMENTS, PIECES, TIERS, TERM_STYLES, terms_in
+from upgrade_data import UPGRADES, PIECES, TIERS, TERM_STYLES, terms_in
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-JS = os.path.normpath(os.path.join(HERE, "..", "game", "src", "augments.js"))
-OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "무제체스_증강_구현표.xlsx"))
+JS = os.path.normpath(os.path.join(HERE, "..", "game", "src", "upgrades.js"))
+OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "무제체스_강화_구현표.xlsx"))
 
 HOOKS = [
     ("onGain", "획득 즉시"),
@@ -142,9 +142,9 @@ def main():
 
     # ═══ 1. 구현 격자 (원본 시트와 같은 기물 × 티어 배치) ═══
     ws = wb.create_sheet("구현 격자")
-    ws["A1"] = "무제체스 증강 구현표 — 기물 × 처치수"
+    ws["A1"] = "무제체스 강화 구현표 — 기물 × 처치수"
     ws["A1"].font = Font(bold=True, size=16, color="2F3E56")
-    ws["A2"] = ("원본 증강표와 같은 배치입니다. 칸마다 선택지가 3개이고, 게임에서는 "
+    ws["A2"] = ("원본 강화표와 같은 배치입니다. 칸마다 선택지가 3개이고, 게임에서는 "
                 "처치를 해낸 기물의 칸 하나를 그대로 펼쳐 그중 1개만 고릅니다.")
     ws["A2"].alignment = WRAP
     ws.merge_cells("A2:E2")
@@ -158,13 +158,13 @@ def main():
     r += 1
 
     for piece in PIECES:
-        rows = max(len(([a for a in AUGMENTS if a["piece"] == piece and a["tier"] == t]))
+        rows = max(len(([a for a in UPGRADES if a["piece"] == piece and a["tier"] == t]))
                    for t in TIERS)
         start = r
         for i in range(rows):
             ws.cell(row=r + i, column=1, value=piece if i == 0 else None)
             for j, t in enumerate(TIERS):
-                opts = [a for a in AUGMENTS if a["piece"] == piece and a["tier"] == t]
+                opts = [a for a in UPGRADES if a["piece"] == piece and a["tier"] == t]
                 cell = ws.cell(row=r + i, column=2 + j)
                 if i < len(opts):
                     a = opts[i]
@@ -207,12 +207,12 @@ def main():
 
     # ═══ 2. 구현 목록 (필터 가능한 표) ═══
     ws2 = wb.create_sheet("구현 목록")
-    cols = ["ID", "기물", "티어", "지속형태", "비밀", "증강 문구",
+    cols = ["ID", "기물", "티어", "지속형태", "비밀", "강화 문구",
             "발동 시점(훅)", "대상 지정", "잠금 조건", "용어"]
     ws2.append(cols)
     style_header(ws2)
     order = {p: i for i, p in enumerate(PIECES)}
-    for a in sorted(AUGMENTS, key=lambda x: (order[x["piece"]], TIERS.index(x["tier"]), x["id"])):
+    for a in sorted(UPGRADES, key=lambda x: (order[x["piece"]], TIERS.index(x["tier"]), x["id"])):
         hk = hooks.get(a["id"], [])
         lock = lock_of(a, blocks)
         ws2.append([
@@ -234,33 +234,33 @@ def main():
 
     # ═══ 3. 훅 설명 ═══
     ws3 = wb.create_sheet("구조 설명")
-    ws3["A1"] = "증강은 어떻게 구현되어 있나"
+    ws3["A1"] = "강화는 어떻게 구현되어 있나"
     ws3["A1"].font = Font(bold=True, size=14, color="2F3E56")
     ws3.append([])
     ws3.append(["항목", "설명"])
     style_header(ws3, row=3)
     notes = [
         ("한 줄 요약",
-         "증강 72종은 game/src/augments.js 안에 '훅' 으로 구현되어 있습니다. "
-         "게임 진행 중 특정 시점(획득·처치·이동·턴 시작 등)이 되면 해당 시점에 등록된 증강이 실행됩니다."),
+         "강화 72종은 game/src/upgrades.js 안에 '훅' 으로 구현되어 있습니다. "
+         "게임 진행 중 특정 시점(획득·처치·이동·턴 시작 등)이 되면 해당 시점에 등록된 강화가 실행됩니다."),
         ("드래프트 방식",
          "처치 카운트가 1·3·6·11 에 닿으면, 그 처치를 해낸 기물의 칸(기물×티어)에 있는 선택지 3개를 "
-         "그대로 펼쳐 보여주고 그중 1개만 고릅니다. 원본 증강표가 칸마다 3개씩 두고 있는 구조를 그대로 따랐습니다."),
+         "그대로 펼쳐 보여주고 그중 1개만 고릅니다. 원본 강화표가 칸마다 3개씩 두고 있는 구조를 그대로 따랐습니다."),
         ("잠금 조건",
-         "지금 발동해도 아무 일이 일어나지 않는 증강은 고를 수 없게 막고 빨간 ✕ 로 표시합니다. "
+         "지금 발동해도 아무 일이 일어나지 않는 강화는 고를 수 없게 막고 빨간 ✕ 로 표시합니다. "
          "기본 규칙은 '해당 기물이 판에 하나도 없으면 잠금' 이고, 그 밖의 개별 조건은 '잠금 조건' 칸에 있습니다."),
         ("자동 발동 추적",
-         "증강 훅을 실행하기 전후로 판을 통째로 비교해, 바뀐 칸을 자동으로 찾아냅니다. "
-         "그래서 72종 전부에 따로 코드를 넣지 않아도 '어느 증강 때문에 무엇이 바뀌었는지' 를 화면에 표시할 수 있습니다."),
-        ("패시브 증강",
-         "이동 규칙 자체를 바꾸는 증강(예: 룩이 기물을 통과, 폰이 뒤로 이동)은 훅이 아니라 "
+         "강화 훅을 실행하기 전후로 판을 통째로 비교해, 바뀐 칸을 자동으로 찾아냅니다. "
+         "그래서 72종 전부에 따로 코드를 넣지 않아도 '어느 강화 때문에 무엇이 바뀌었는지' 를 화면에 표시할 수 있습니다."),
+        ("패시브 강화",
+         "이동 규칙 자체를 바꾸는 강화(예: 룩이 기물을 통과, 폰이 뒤로 이동)은 훅이 아니라 "
          "체스 엔진의 이동 생성기(engine.js)가 직접 읽습니다. 표에서 '패시브' 로 표시된 것들입니다."),
         ("용어",
          "지정불가 · 제거 · 교환 · 포영 · 변이 · 비밀 여섯 가지를 용어로 정의하고, "
-         "증강 문구 안의 용어와 카드 아래 #태그를 같은 색으로 칠합니다. "
-         "'처치' 도 용어지만 거의 모든 증강에 나와서 태그로는 달지 않았습니다."),
+         "강화 문구 안의 용어와 카드 아래 #태그를 같은 색으로 칠합니다. "
+         "'처치' 도 용어지만 거의 모든 강화에 나와서 태그로는 달지 않았습니다."),
         ("이 파일은 자동 생성",
-         "tools/build_impl_xlsx.py 가 augments.js 를 직접 읽어서 만듭니다. "
+         "tools/build_impl_xlsx.py 가 upgrades.js 를 직접 읽어서 만듭니다. "
          "코드를 고친 뒤 다시 돌리면 표도 같이 갱신됩니다."),
     ]
     for k, v in notes:
@@ -274,10 +274,10 @@ def main():
 
     # ═══ 4. 용어 색상 ═══
     ws4 = wb.create_sheet("용어 색상")
-    ws4.append(["용어", "글자색", "배경색", "쓰이는 증강 수"])
+    ws4.append(["용어", "글자색", "배경색", "쓰이는 강화 수"])
     style_header(ws4)
     for term, st in TERM_STYLES.items():
-        n = sum(1 for a in AUGMENTS if term in terms_in(a["text"], a["secret"]))
+        n = sum(1 for a in UPGRADES if term in terms_in(a["text"], a["secret"]))
         ws4.append([term, st["fg"], st["bg"], n])
         cell = ws4.cell(row=ws4.max_row, column=1)
         cell.fill = PatternFill("solid", fgColor=st["bg"].lstrip("#"))
@@ -291,9 +291,9 @@ def main():
     wb.save(OUT)
     print("saved:", OUT)
     print("sheets:", wb.sheetnames)
-    passive = [a["id"] for a in AUGMENTS if not hooks.get(a["id"])]
-    print(f"훅으로 구현: {len(AUGMENTS) - len(passive)}종 / 패시브: {len(passive)}종 {passive}")
-    print(f"잠금 조건이 명시된 증강: {len(blocks)}종")
+    passive = [a["id"] for a in UPGRADES if not hooks.get(a["id"])]
+    print(f"훅으로 구현: {len(UPGRADES) - len(passive)}종 / 패시브: {len(passive)}종 {passive}")
+    print(f"잠금 조건이 명시된 강화: {len(blocks)}종")
 
 
 if __name__ == "__main__":

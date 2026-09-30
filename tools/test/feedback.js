@@ -1,6 +1,6 @@
 /* 피드백 항목을 '실제 화면' 에서 확인한다.
 
-   augments.js 는 Game.api 를 가짜로 바꿔 훅만 본다 — 증강이 판을 바꾸는지는 알지만
+   upgrades.js 는 Game.api 를 가짜로 바꿔 훅만 본다 — 강화가 판을 바꾸는지는 알지만
    사람이 화면에서 겪는 것(칸에 점이 찍히는지 · 배지가 붙는지 · 선택지가 잠겨서 오는지)은 못 본다.
    여기서는 판만 차려 놓고 그 뒤로는 전부 진짜다 — 진짜 칸을 눌러서 두고, 진짜 드래프트 창의
    카드를 누르고, 진짜 대상 지정 바에서 칸을 찍는다. Game.api 는 손대지 않는다.
@@ -107,9 +107,9 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
   {
     await P.click('#h-codex');
     await P.waitForTimeout(500);
-    check('시작화면에서 증강 도감이 열린다', await P.$$eval('.codex .ccard', n => n.length > 0), true);
+    check('시작화면에서 강화 도감이 열린다', await P.$$eval('.codex .ccard', n => n.length > 0), true);
 
-    /* 가독성 (피드백 '증강 도감 1') — 기물별 · 티어별로 볼 수 있고,
+    /* 가독성 (피드백 '강화 도감 1') — 기물별 · 티어별로 볼 수 있고,
        한 기물 12장이 한 화면에 (거의) 들어오는지 */
     const seg = (label) => P.evaluate((t) => {
       const b = [...document.querySelectorAll('.codexbar .seg button')].find(x => x.textContent === t);
@@ -135,7 +135,7 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
     check('시작화면에서 규칙 · 용어가 열린다', await P.$$eval('.codex .rcard', n => n.length > 0), true);
     check('규칙 화면에 바로가기 줄이 있다',
       await P.$$eval('.codexbar .seg button', ns => ns.map(n => n.textContent)),
-      ['증강을 얻는 흐름', '조작', '전역 룰', '용어']);
+      ['강화를 얻는 흐름', '조작', '전역 룰', '용어']);
     check('전역 룰은 접혀서 온다 (피드백 규칙/용어 2)', await P.$$eval('.rfold[open]', n => n.length), 0);
 
     // 바로가기로 실제로 건너뛰는지
@@ -175,7 +175,7 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
     await move(P, 'e4', 'd5');
     const cards = await draftCards(P);
     check('폰으로 처치 → 폰 칸 선택지 3개', cards.map(c => c.id), ['P1a', 'P1b', 'P1c']);
-    check('드래프트 머리말이 처치한 기물 칸', await P.$eval('.draft h2', n => n.textContent), '폰 증강');
+    check('드래프트 머리말이 처치한 기물 칸', await P.$eval('.draft h2', n => n.textContent), '폰 강화');
     check('카드마다 지속 유형 색이 붙는다', cards.map(c => c.dur), ['d-turn', 'd-count', 'd-perm']);
     check('색 범례가 있다', await P.$$eval('.draft .durlegend > *', n => n.length >= 3), true);
 
@@ -187,7 +187,7 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
       return { 제목: px('.peekbar .peekmsg b', 'fontSize'), 부제: px('.peekbar .peeksub', 'fontSize'), 버튼: px('.peekbar .skipbtn.big', 'fontSize') };
     });
     check("'판을 보는 중입니다' 제목 22px 이상", sizes.제목 >= 22, true);
-    check("'증강 고르기로' 버튼 18px 이상", sizes.버튼 >= 18, true);
+    check("'강화 고르기로' 버튼 18px 이상", sizes.버튼 >= 18, true);
     check('판 보기 중에는 덮개가 걷힌다', await P.$$eval('.overlay.peeking', n => n.length), 1);
     check('판 보기 중에도 기물이 다 보인다', await P.$$eval('#board .pc', n => n.length), 5);
     await P.evaluate(() => document.querySelector('.peekbar .skipbtn.big').click());
@@ -293,7 +293,7 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
     check('고른 기물이 시작 칸에 되살아난다', await pieceAt(P, 'a1'), 'pc wp');
   }
 
-  /* ── K1b — 그 칸의 3개 중 2개 (피드백 '증강 도감 2') ──
+  /* ── K1b — 그 칸의 3개 중 2개 (피드백 '강화 도감 2') ──
      킹으로 처치해 킹 1개 칸에서 K1b 를 고르면, 이어지는 3개 티어 드래프트가
      같은 칸을 두 번 펼친다 ── */
   {
@@ -319,11 +319,11 @@ const K = ['e1', 'k', 'w'], k = ['e8', 'k', 'b'];
     await pickCard(P, 'K3a');
     await H.answerPrompts(P);
     /* 드래프트로 고른 것은 K1b(1개 칸) + 킹 3개 칸에서 둘.
-       K3a 는 "나이트·비숍 중 한 기물의 6개 티어 증강을 추가로 얻는다" 라 그 몫이 하나 더 붙는데,
+       K3a 는 "나이트·비숍 중 한 기물의 6개 티어 강화를 추가로 얻는다" 라 그 몫이 하나 더 붙는데,
        그건 K3a 가 하는 일이지 드래프트가 칸을 넘어간 것이 아니다. */
-    const augs = await P.evaluate(() => Game.G.augs.w.slice());
-    check('드래프트로 고른 것은 전부 킹 칸', augs.filter(x => x[0] === 'K'), ['K1b', 'K3b', 'K3a']);
-    check('킹 칸 밖의 증강은 K3a 가 준 것 하나뿐', augs.filter(x => x[0] !== 'K').length, 1);
+    const upgs = await P.evaluate(() => Game.G.upgs.w.slice());
+    check('드래프트로 고른 것은 전부 킹 칸', upgs.filter(x => x[0] === 'K'), ['K1b', 'K3b', 'K3a']);
+    check('킹 칸 밖의 강화는 K3a 가 준 것 하나뿐', upgs.filter(x => x[0] !== 'K').length, 1);
   }
 
   /* ── 제한시간 칸 ──
