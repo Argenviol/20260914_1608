@@ -63,7 +63,7 @@ PLAY_COLS = [
     ("side", "s", 1), ("is_ai", "b", 0), ("outcome", "s", 10), ("reason", "s", 200),
     ("moves", "i", 0), ("plies", "i", 0), ("duration_ms", "i", 0),
     ("kills", "i", 0), ("opp_kills", "i", 0), ("tier_reached", "i", 0),
-    ("augs", "a", 24), ("piece_moves", "o", 0), ("piece_kills", "o", 0),
+    ("upgs", "a", 24), ("piece_moves", "o", 0), ("piece_kills", "o", 0),
 ]
 PICK_COLS = [
     ("id", "s", 40), ("play_id", "s", 40), ("ply", "i", 0), ("tier", "i", 0),
@@ -184,7 +184,9 @@ def clean_record(r):
         out[k] = str(v)[:cap] if isinstance(v, str) else None
     mv = r.get("moves")
     out["moves"] = max(0, min(100000, int(mv))) if isinstance(mv, (int, float)) else 0
-    for k in ("kills", "augs"):
+    if "upgs" not in r and "augs" in r:   # 용어를 바꾸기 전에 저장된 전적 (계정에 쌓인 옛 줄도 여기서 바뀐다)
+        r = {**r, "upgs": r["augs"]}
+    for k in ("kills", "upgs"):
         v = r.get(k)
         out[k] = ({"w": int(v.get("w") or 0), "b": int(v.get("b") or 0)}
                   if isinstance(v, dict) else {"w": 0, "b": 0})
@@ -266,13 +268,30 @@ def supabase_insert(table, rows):
         r.read()
 
 
+def as_new_play(r):
+    """용어를 바꾸기 전 화면(캐시에 남은 옛 탭)이 보낸 augs 를 upgs 로 받는다."""
+    if isinstance(r, dict) and "upgs" not in r and "augs" in r:
+        return {**r, "upgs": r["augs"]}
+    return r
+
+
 def stat_forward(plays, picks):
-    """응답을 이미 보낸 뒤 따로 돈다 — 수퍼베이스가 느려도 게임이 기다리지 않게."""
+    """응답을 이미 보낸 뒤 따로 돈다 — 수퍼베이스가 느려도 게임이 기다리지 않게.
+
+    표·열 이름은 새 것(upgrade_picks · plays.upgs)으로 먼저 넣어 본다. DB 를 아직 안 바꿨으면
+    수퍼베이스가 모르는 이름이라고 4xx 로 돌려주니, 그때만 옛 이름(aug_picks · plays.augs)으로 한 번 더 넣는다.
+    그래서 서버 배포와 DB 이전은 아무 순서로 해도 통계가 끊기지 않는다. 이전이 끝나면 옛 이름 쪽은 지운다."""
     try:
         if plays:
-            supabase_insert("plays", plays)
+            try:
+                supabase_insert("plays", plays)
+            except urllib.error.HTTPError:
+                supabase_insert("plays", [{("augs" if k == "upgs" else k): v for k, v in p.items()} for p in plays])
         if picks:
-            supabase_insert("aug_picks", picks)
+            try:
+                supabase_insert("upgrade_picks", picks)
+            except urllib.error.HTTPError:
+                supabase_insert("aug_picks", picks)
     except Exception as e:
         # 통계 때문에 서버가 시끄러워지면 안 된다. 한 줄만 남긴다.
         print("[stat] 전송 실패:", e, flush=True)
@@ -760,7 +779,7 @@ class Handler(socketserver.StreamRequestHandler):
         if not isinstance(m, dict):
             return
 
-        plays = [clean_row(r, PLAY_COLS) for r in (m.get("plays") or [])[:STAT_MAX_PLAYS]]
+        plays = [clean_row(as_new_play(r), PLAY_COLS) for r in (m.get("plays") or [])[:STAT_MAX_PLAYS]]
         picks = [clean_row(r, PICK_COLS) for r in (m.get("picks") or [])[:STAT_MAX_PICKS]]
         plays = [r for r in plays if r and r.get("id")]
         picks = [r for r in picks if r and r.get("id") and r.get("play_id")]
