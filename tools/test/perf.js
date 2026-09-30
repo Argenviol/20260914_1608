@@ -71,7 +71,7 @@ async function measure(page, label, fn, budget) {
   console.log(`가만히 있을 때 프레임: 최악 ${idle[0]}ms · 중앙값 ${idle[Math.floor(idle.length / 2)]}ms (스로틀 바닥값)\n`);
 
   // ── 시작 화면에서 여는 패널 ──
-  await measure(page, '시작화면 → 증강 도감 열기', async () => {
+  await measure(page, '시작화면 → 강화 도감 열기', async () => {
     await page.click('#h-codex');
     await page.waitForSelector('.codexwrap, #codex-body, .cx', { timeout: 15000 }).catch(() => { });
     await page.waitForTimeout(300);

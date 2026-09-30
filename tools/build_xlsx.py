@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""augment_data.py -> docs/무제체스_증강표_v2.xlsx 생성"""
+"""upgrade_data.py -> docs/무제체스_강화표_v2.xlsx 생성"""
 import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from augment_data import (
-    AUGMENTS, PIECES, TIERS, GLOBAL_RULES, GLOSSARY,
+from upgrade_data import (
+    UPGRADES, PIECES, TIERS, GLOBAL_RULES, GLOSSARY,
     BALANCE_KILL, BALANCE_PIECE, BALANCE_POPULAR, by_cell, changed,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "무제체스_증강표_v2.xlsx"))
+OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "무제체스_강화표_v2.xlsx"))
 
 # 원본 시트의 색깔별 의미
 TAG_FILL = {
@@ -45,13 +45,13 @@ def widths(ws, spec):
         ws.column_dimensions[col].width = w
 
 
-# ══════════════════════════ 1. 증강표 (격자) ══════════════════════════
+# ══════════════════════════ 1. 강화표 (격자) ══════════════════════════
 def sheet_grid(wb):
-    ws = wb.create_sheet("증강표")
-    ws["A1"] = "무제체스 증강표 (v2 · 개정판)"
+    ws = wb.create_sheet("강화표")
+    ws["A1"] = "무제체스 강화표 (v2 · 개정판)"
     ws["A1"].font = Font(bold=True, size=16, color="2F3E56")
     ws["A2"] = ("처치 카운트가 1 · 3 · 6 · 11 에 도달하면, 그 처치를 해낸 기물의 칸(기물 × 티어)에 있는 선택지 3개가 그대로 펼쳐지고 그중 1개를 획득합니다. "
-                "분홍색 배경 = 원안에서 수정된 증강 (수정 사유는 '개정내역' 시트 참고).")
+                "분홍색 배경 = 원안에서 수정된 강화 (수정 사유는 '개정내역' 시트 참고).")
     ws["A2"].alignment = WRAP
     ws.merge_cells("A2:F2")
     ws.row_dimensions[2].height = 30
@@ -102,20 +102,20 @@ def sheet_grid(wb):
         r += 1
     ws.cell(row=r, column=1, value="개정됨").fill = CHANGED_FILL
     ws.cell(row=r, column=1).border = BOX
-    ws.cell(row=r, column=2, value="원안에서 문구/수치가 수정된 증강")
+    ws.cell(row=r, column=2, value="원안에서 문구/수치가 수정된 강화")
 
     widths(ws, {"A": 12, "B": 46, "C": 46, "D": 46, "E": 46})
     return ws
 
 
-# ══════════════════════════ 2. 증강 목록 (DB) ══════════════════════════
+# ══════════════════════════ 2. 강화 목록 (DB) ══════════════════════════
 def sheet_list(wb):
-    ws = wb.create_sheet("증강목록")
+    ws = wb.create_sheet("강화목록")
     cols = ["ID", "기물", "티어", "지속형태", "비밀", "개정 문구 (적용본)", "원본 문구", "구현", "개정 여부"]
     ws.append(cols)
     style_header(ws)
     order = {p: i for i, p in enumerate(PIECES)}
-    for a in sorted(AUGMENTS, key=lambda x: (order[x["piece"]], TIERS.index(x["tier"]), x["id"])):
+    for a in sorted(UPGRADES, key=lambda x: (order[x["piece"]], TIERS.index(x["tier"]), x["id"])):
         ws.append([
             a["id"], a["piece"], a["tier"], a["tag"], "O" if a["secret"] else "",
             a["text"],
@@ -156,7 +156,7 @@ def sheet_changes(wb):
 # ══════════════════════════ 4. 전역 룰 ══════════════════════════
 def sheet_rules(wb):
     ws = wb.create_sheet("전역룰")
-    ws["A1"] = "전역 룰 패치 — 개별 증강보다 우선하는 규칙"
+    ws["A1"] = "전역 룰 패치 — 개별 강화보다 우선하는 규칙"
     ws["A1"].font = Font(bold=True, size=14, color="2F3E56")
     ws.append([])
     ws.append(["규칙", "내용", "필요한 이유"])
@@ -237,7 +237,7 @@ def sheet_balance(wb):
     for line in [
         "룩 1개: R1b(줄 전멸)를 사거리 4칸·아군 포함·킹 제외로 하향 → '1개 밸런스'에서 룩의 순위가 내려감.",
         "룩 11개: 원본에서 최약체 평가. R11c 캐슬링 조건을 완전 해방해 소폭 상향.",
-        "킹 6개/11개: 킹 직접 강화(2칸 이동·퀸처럼 이동)를 메타 증강으로 교체. "
+        "킹 6개/11개: 킹 직접 강화(2칸 이동·퀸처럼 이동)를 메타 강화로 교체. "
         "'킹=플레이어' 철학에 맞추면서, 원본에서 최약체였던 킹 11개(K11b)를 달성 가능한 승리 조건으로 재설계.",
         "퀸 11개: 원본에서 최강(11개 >>> ...). 킹 제외 규칙만 추가하고 위력은 유지.",
         "비숍 3개: 홀/짝 동시 등장 금지 규칙으로 '무조건 맞는 선택지' 문제 제거.",
@@ -257,7 +257,7 @@ def sheet_balance(wb):
         ("평균 수(플라이)", "162"),
         ("한 판 평균 총 처치 수", "10.7 (양측 합산)"),
         ("승부가 난 비율", "40판 중 36판 체크메이트"),
-        ("한 진영당 평균 획득 증강", "2.0개"),
+        ("한 진영당 평균 획득 강화", "2.0개"),
         ("도달 티어 분포(80진영 기준)", "0단계 13 / 1단계 10 / 2단계 17 / 3단계 32 / 4단계 8"),
     ]:
         ws.cell(row=r, column=1, value=k).border = BOX
@@ -269,13 +269,13 @@ def sheet_balance(wb):
     r += 1
     for line in [
         "11개 티어에 도달하는 진영은 10%(80진영 중 8)뿐이다. 원본 시트의 '11개 밸런스' 평가가 "
-        "실전 경험보다 추정에 가까울 수밖에 없는 이유이며, 가장 화려한 증강 18개가 거의 쓰이지 않는다.",
+        "실전 경험보다 추정에 가까울 수밖에 없는 이유이며, 가장 화려한 강화 18개가 거의 쓰이지 않는다.",
         "→ 한때 킹 1개 티어에 K1d(필요 처치 수 -1)를 신설했으나 되돌렸다. 칸마다 선택지가 정확히 3개라는 "
         "규칙이 드래프트 구조(칸 하나를 통째로 펼침)를 떠받치고 있어, 한 칸만 4개가 되면 그 칸에서만 규칙이 달라진다. "
         "현재 24칸 전부 3개이며, 이 밸런스 문제는 아직 열려 있다.",
         "→ 대응(미적용, 검토 필요): 티어를 1·3·6·11 에서 1·3·6·9 로 낮추는 안. "
         "한 판 평균 처치 수가 양측 합산 10.7 이라 11은 사실상 '한 진영이 판을 압도했을 때'만 열린다.",
-        "제거는 처치에 포함되지 않으므로, 광역 제거 증강을 고른 진영은 오히려 다음 티어가 늦어진다. "
+        "제거는 처치에 포함되지 않으므로, 광역 제거 강화를 고른 진영은 오히려 다음 티어가 늦어진다. "
         "의도된 브레이크지만 11개 티어 도달률을 더 낮추는 요인이기도 하다.",
     ]:
         ws.cell(row=r, column=1, value="· " + line).alignment = WRAP

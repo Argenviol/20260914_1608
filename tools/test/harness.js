@@ -115,7 +115,7 @@ async function waitPly(page, ply) {
 async function state(page) {
   return page.evaluate(() => ({
     side: Game.mySide, turn: Game.G.turn, ply: Game.G.ply, busy: Game.busy,
-    paused: Game.clockPaused, kills: Game.G.kills, augs: Game.G.augs, revealed: Game.G.revealed,
+    paused: Game.clockPaused, kills: Game.G.kills, upgs: Game.G.upgs, revealed: Game.G.revealed,
     turnbar: (document.querySelector('#turnbar .turntext') || {}).textContent,
     actions: [...document.querySelectorAll('#actions .act b')].map(b => b.textContent),
     clocks: [...document.querySelectorAll('.clock')].map(c => c.dataset.side + '=' + c.textContent),

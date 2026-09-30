@@ -13,7 +13,7 @@ const win = {};
 const ctx = vm.createContext({ window: win, console, performance, Math });
 for (const f of ['engine.js', 'ai.js']) vm.runInContext(fs.readFileSync(path.join(SRC, f), 'utf8'), ctx);
 const E = win.Engine, AI = win.AI;
-// augScore 가 Game.nextThreshold 를 본다
+// upgScore 가 Game.nextThreshold 를 본다
 win.Game = { nextThreshold: (G, s) => { const T = [1, 3, 6, 11]; const i = G.tierIdx[s]; return i >= T.length ? null : T[i]; } };
 
 let pass = 0;

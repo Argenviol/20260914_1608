@@ -1,6 +1,6 @@
 /* 무제체스 엔진 회귀 테스트 — 브라우저도 중계 서버도 없이 `node engine.js` 로 돈다.
    engine.js 는 DOM 을 안 쓰는 순수 규칙 코드라 vm 에 가짜 window 만 하나 쥐여 주면 그대로 불린다.
-   화면까지 봐야 하는 것은 online.js · augments.js 쪽이다. */
+   화면까지 봐야 하는 것은 online.js · upgrades.js 쪽이다. */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -54,7 +54,7 @@ function check(label, got, want) {
 /* ─────────────────────────────────────────────────────────────
    P1b — "다음 1회, 폰이 두 칸 전진할 수 있습니다"
 
-   한 번의 전진을 한 번 더 하는 증강이므로 최대 거리는 폰의 상태에 달려 있다.
+   한 번의 전진을 한 번 더 하는 강화이므로 최대 거리는 폰의 상태에 달려 있다.
      기본 배치 폰: (2칸 + 1칸) → 1~3칸
      이미 움직인 폰: (1칸 + 1칸) → 1~2칸
    예전에는 둘 다 3칸까지 갈 수 있었다 (피드백 '플레이 2').
@@ -100,7 +100,7 @@ function check(label, got, want) {
 }
 
 /* 횟수를 깎는 것은 p1b 표시가 붙은 수뿐이다 (game.js 의 소모 조건).
-   기본 배치 폰의 2칸 전진은 원래 규칙이라 증강을 쓰지 않아야 한다. */
+   기본 배치 폰의 2칸 전진은 원래 규칙이라 강화를 쓰지 않아야 한다. */
 {
   const G = board('k7/8/8/8/8/8/4P3/7K', { moved: false });
   G.flags.w.P1b = 1;
@@ -120,7 +120,7 @@ function check(label, got, want) {
 /* ─────────────────────────────────────────────────────────────
    지정불가 · 포영 — 피드백 '플레이 1'("포영/지정불가 작동안함")
 
-   둘 다 여러 증강이 공유하는 상태라, 증강 하나가 아니라 엔진 쪽 규칙을 잠가 둔다.
+   둘 다 여러 강화가 공유하는 상태라, 강화 하나가 아니라 엔진 쪽 규칙을 잠가 둔다.
      지정불가: 움직일 수도, 처치 대상이 될 수도 없다. 정해진 ply 에 정확히 풀린다.
      포영    : 칸을 비우고 판 밖으로 나갔다가, 정해진 ply 에 그 칸으로 돌아온다.
                돌아올 때 그 칸에 기물이 있으면 피아 상관없이 그 기물을 제거한다.
@@ -151,7 +151,7 @@ function movesOf(G, from) {
   check('지정불가 · 정해진 ply 에 풀린다', movesOf(G, 'e4'), ['d5x', 'e5']);
 }
 
-/* 킹은 전역 룰로 지정불가 대상이 아니다 — 증강 쪽에서 막지만 엔진도 같이 잠가 둔다 */
+/* 킹은 전역 룰로 지정불가 대상이 아니다 — 강화 쪽에서 막지만 엔진도 같이 잠가 둔다 */
 {
   const G = board('4k3/8/8/8/8/8/8/4K3');
   check('지정불가 · 킹은 애초에 대상이 아니다', E.protectedPiece(G, sq('e8')), true);
@@ -195,7 +195,7 @@ function movesOf(G, from) {
   check('포영 · 킹은 나가지 않는다', E.phaseOut(G, sq('e8'), G.ply + 2), false);
 
   const H = board('4k3/8/8/3r4/8/8/8/4K3');
-  H.augs.b.push('R3c');
+  H.upgs.b.push('R3c');
   check('포영 · R3c 룩은 면역이다', E.phaseOut(H, sq('d5'), H.ply + 2), false);
 }
 
@@ -209,7 +209,7 @@ function movesOf(G, from) {
    ───────────────────────────────────────────────────────────── */
 {
   const G = board('5k2/8/8/8/3P4/8/8/4K3', { moved: true });
-  G.augs.w.push('P11a');
+  G.upgs.w.push('P11a');
   check('P11a · 폰이 두 칸 대각까지 잡는다',
     E.legalMoves(G, sq('d4')).filter(m => m.capture).map(m => name(m.to)), []);
 
@@ -217,7 +217,7 @@ function movesOf(G, from) {
   H.bd[sq('f6')] = E.mkPiece('k', 'b');
   H.bd[sq('e1')] = E.mkPiece('k', 'w');
   H.bd[sq('f8')] = null;
-  H.augs.w.push('P11a');
+  H.upgs.w.push('P11a');
   check('P11a · 두 칸 대각에 있는 킹을 잡을 수 있다',
     E.legalMoves(H, sq('d4')).some(m => m.to === sq('f6') && m.capture), true);
   check('P11a · 그 칸을 공격 중이라고 본다', E.attacked(H, sq('f6'), 'w'), true);
@@ -231,23 +231,23 @@ function movesOf(G, from) {
   I.bd[sq('f6')] = E.mkPiece('k', 'b');
   I.bd[sq('e1')] = E.mkPiece('k', 'w');
   I.bd[sq('f8')] = null;
-  I.augs.w.push('P11a');
+  I.upgs.w.push('P11a');
   check('P11a · 중간 칸이 막히면 공격이 아니다', E.attacked(I, sq('f6'), 'w'), false);
 }
 
 /* 같은 칸이 두 번 나오지 않고, 초기 2칸에는 double 표시가 붙는다 */
 {
   const G = board('4k3/8/8/8/8/8/3P4/4K3', { moved: false });
-  G.augs.w.push('P11a');
+  G.upgs.w.push('P11a');
   const fwd = E.legalMoves(G, sq('d2')).filter(m => !m.capture);
   check('P11a · 기본 배치 폰의 전진은 d3 · d4 둘뿐', fwd.map(m => name(m.to)).sort(), ['d3', 'd4']);
   check('P11a · 2칸 전진에 double 이 붙는다',
     fwd.filter(m => m.to === sq('d4')).map(m => !!m.double), [true]);
 
-  // 증강이 없을 때와 같은 모양인지도 함께
+  // 강화가 없을 때와 같은 모양인지도 함께
   const H = board('4k3/8/8/8/8/8/3P4/4K3', { moved: false });
   const hf = E.legalMoves(H, sq('d2')).filter(m => !m.capture);
-  check('증강 없음 · 전진은 d3 · d4, 2칸에 double',
+  check('강화 없음 · 전진은 d3 · d4, 2칸에 double',
     [hf.map(m => name(m.to)).sort(), hf.filter(m => m.to === sq('d4')).map(m => !!m.double)],
     [['d3', 'd4'], [true]]);
 }
@@ -259,11 +259,11 @@ function movesOf(G, from) {
 {
   const G = board('4k3/8/8/3r4/8/8/8/4K3');
   const r = G.bd[sq('d5')];
-  G.augs.b.push('R3c');
+  G.upgs.b.push('R3c');
   check('R3c · 제거 면역', E.removePiece(G, sq('d5')), false);
   check('R3c · 포영 면역', E.phaseOut(G, sq('d5'), G.ply + 2), false);
   check('R3c · 변이 면역', E.mutate(G, sq('d5'), 'q'), false);
-  // 지정불가는 augments.js 의 untarget 이 거른다 — 엔진 쪽 판정만 여기서 잠가 둔다
+  // 지정불가는 upgrades.js 의 untarget 이 거른다 — 엔진 쪽 판정만 여기서 잠가 둔다
   check('R3c · immune 이 룩을 가려낸다', E.immune(G, r), true);
   check('R3c · 룩이 아니면 면역이 아니다', E.immune(G, E.mkPiece('n', 'b')), false);
 }
@@ -272,17 +272,17 @@ function movesOf(G, from) {
    attacked() 와 수 생성이 같은 답을 내는가 (무작위 판 대조)
 
    attacked() 는 체크 판정의 최다 호출 지점이라 속도 때문에 수 생성과 따로 구현돼 있다.
-   그래서 증강이 수 생성만 바꾸고 attacked 를 안 고치면, 그 증강으로 잡을 수 있는데도
+   그래서 강화가 수 생성만 바꾸고 attacked 를 안 고치면, 그 강화로 잡을 수 있는데도
    체크가 아닌 것으로 판정된다 — P11a 가 실제로 그랬다.
    둘이 늘 같은 답을 내는지 무작위 판으로 맞춰 본다.
    ───────────────────────────────────────────────────────────── */
 {
-  // attacked() 안의 augCountFor 가 AUG_BY_ID 를 본다. 앞의 41개는 증강표 없이 돌던 것이라
-  // 순서를 바꾸지 않고 여기서만 증강표를 얹는다.
+  // attacked() 안의 upgCountFor 가 UPG_BY_ID 를 본다. 앞의 41개는 강화표 없이 돌던 것이라
+  // 순서를 바꾸지 않고 여기서만 강화표를 얹는다.
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../game/src/data.js'), 'utf8'), ctx);
 
-  // 수 생성에 관여하는 증강만 모았다 (engine.js 안에 id 가 박혀 있는 것들)
-  const MOVE_AUGS = ['P3b', 'P6a', 'P6b', 'P11a', 'P11c', 'R1a', 'R3c', 'R11a', 'R11c',
+  // 수 생성에 관여하는 강화만 모았다 (engine.js 안에 id 가 박혀 있는 것들)
+  const MOVE_UPGS = ['P3b', 'P6a', 'P6b', 'P11a', 'P11c', 'R1a', 'R3c', 'R11a', 'R11c',
     'N11b', 'Q3c', 'Q6b', 'Q11c'];
   const TYPES = ['p', 'r', 'n', 'b', 'q'];
   let seed = 20260928;
@@ -306,8 +306,8 @@ function movesOf(G, from) {
       G.bd[i] = pc;
     }
     for (const col of ['w', 'b']) {
-      G.augs[col] = MOVE_AUGS.filter(() => rnd() < 0.3);
-      for (const id of G.augs[col]) G.flags[col][id] = 1;
+      G.upgs[col] = MOVE_UPGS.filter(() => rnd() < 0.3);
+      for (const id of G.upgs[col]) G.flags[col][id] = 1;
     }
     return G;
   }
@@ -328,7 +328,7 @@ function movesOf(G, from) {
         checked++;
         const got = E.attacked(G, sq, by), want = caps.has(sq);
         if (got !== want && bad.length < 4) {
-          bad.push({ sq: name(sq), by, got, want, augs: G.augs[by].join('/'),
+          bad.push({ sq: name(sq), by, got, want, upgs: G.upgs[by].join('/'),
             bd: G.bd.map((p, i) => p ? name(i) + (p.color === 'w' ? p.type.toUpperCase() : p.type) : null).filter(Boolean).join(' ') });
         }
       }

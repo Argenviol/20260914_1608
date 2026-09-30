@@ -4,9 +4,9 @@
    서버는 판을 모른다. "판을 바꾼 쪽이 결과를 보낸다".
    받는 쪽은 계산하지 않고 그대로 채택하므로 어긋날 수가 없다.
 
-   비밀 증강
-     자기편의 아직 공개되지 않은 비밀 증강 id 는 '?w1' 같은 가면으로 바꿔 보낸다.
-     가면에는 기물·티어만 담는다 — 지금 화면이 숨김 증강에 보여 주는 것과 같은 양이다.
+   비밀 강화
+     자기편의 아직 공개되지 않은 비밀 강화 id 는 '?w1' 같은 가면으로 바꿔 보낸다.
+     가면에는 기물·티어만 담는다 — 지금 화면이 숨김 강화에 보여 주는 것과 같은 양이다.
      진짜 id 는 이 클라이언트 밖으로 나가지 않고, 발동해서 공개되는 순간부터 실린다.
    ============================================================ */
 (function (global) {
@@ -99,7 +99,7 @@
   Net.joinRoom = function (code, tc) { Net.connect(); waitOpen(() => raw({ t: 'join', code, tc })); };
   Net.resign = function () { raw({ t: 'resign' }); };
   // 시계 멈춤/재개처럼 판을 바꾸지 않는 짧은 신호
-  // extra: 증강 선택 중 남은 시간처럼 kind 마다 딸려 가는 값
+  // extra: 강화 선택 중 남은 시간처럼 kind 마다 딸려 가는 값
   Net.note = function (kind, clock, extra) { raw(Object.assign({ t: 'note', kind, clock }, extra || {})); };
   Net.askRematch = function () { raw({ t: 'rematch' }); };
   Net.abort = function () { raw({ t: 'abort' }); };
@@ -134,7 +134,7 @@
     }
   }
 
-  /* ═══════════════════ 비밀 증강 가면 ═══════════════════ */
+  /* ═══════════════════ 비밀 강화 가면 ═══════════════════ */
 
   let maskSeq = 0;
   const toMask = Object.create(null);     // 'B1c' -> '?w1'   (내 것만. 밖으로 안 나간다)
@@ -150,7 +150,7 @@
   Net.resetMasks = resetMasks;
 
   /* 가면 해독표는 주인 컴퓨터에만 있다. 새로고침으로 날아가면 서버에 보관된 판을
-     다시 받았을 때 내 비밀 증강을 나조차 못 읽는다. 그래서 이 탭에 남겨 둔다.
+     다시 받았을 때 내 비밀 강화를 나조차 못 읽는다. 그래서 이 탭에 남겨 둔다.
      서버로도, 상대에게도 나가지 않는다. */
   const VAULT_KEY = 'mujeChess.vault';
 
@@ -172,22 +172,22 @@
   }
   Net.loadVault = loadVault;
 
-  // 상대가 보낸 가면을 UI·증강 코드가 다룰 수 있게 등록해 둔다.
-  // B11c 가 AUG_BY_ID[id].piece 를 읽고, augCountFor 도 piece 로 세기 때문에
+  // 상대가 보낸 가면을 UI·강화 코드가 다룰 수 있게 등록해 둔다.
+  // B11c 가 UPG_BY_ID[id].piece 를 읽고, upgCountFor 도 piece 로 세기 때문에
   // 기물·티어는 반드시 들어 있어야 한다.
   function registerStub(id, meta) {
-    if (global.AUG_BY_ID[id]) return;
-    global.AUG_BY_ID[id] = {
+    if (global.UPG_BY_ID[id]) return;
+    global.UPG_BY_ID[id] = {
       id, piece: meta.piece, tier: meta.tier, type: meta.type || 'p',
       tag: '비밀', secret: true, hidden: true,
-      text: '상대가 아직 공개하지 않은 비밀 증강입니다.', terms: [],
+      text: '상대가 아직 공개하지 않은 비밀 강화입니다.', terms: [],
     };
   }
 
-  // 내 비밀 증강 → 가면. 공개된 것은 그대로 둔다.
+  // 내 비밀 강화 → 가면. 공개된 것은 그대로 둔다.
   function maskMine(ids, out) {
     return ids.map(id => {
-      const a = global.AUG_BY_ID[id];
+      const a = global.UPG_BY_ID[id];
       if (!a || !a.secret || Game().G.revealed[id]) return id;      // 공개됐거나 비밀이 아님
       if (!toMask[id]) {
         const m = '?' + Net.side + (++maskSeq);
@@ -202,22 +202,22 @@
   // 상대가 돌려준 내 목록에서 가면을 벗긴다 (내 map 으로만 가능하다)
   function unmaskMine(ids) { return ids.map(id => toReal[id] || id); }
 
-  // 아직 공개되지 않은 내 비밀 증강 id 목록
+  // 아직 공개되지 않은 내 비밀 강화 id 목록
   function mySecretIds() {
     const G = Game().G;
     if (!G || !Net.side) return [];
-    return G.augs[Net.side].filter(id => {
-      const a = global.AUG_BY_ID[id];
+    return G.upgs[Net.side].filter(id => {
+      const a = global.UPG_BY_ID[id];
       return a && a.secret && !G.revealed[id];
     });
   }
 
-  /* 증강 id 는 목록 말고도 두 군데에 그대로 남는다.
+  /* 강화 id 는 목록 말고도 두 군데에 그대로 남는다.
        - 예약 효과의 tag / 만료 효과의 expTag  (예: sched tag:'B1c')
        - flags 의 키                            (예: flags.b.B6c, flags.b.B11bArmed)
      둘 다 내보내기 전에 지우고, 되받을 때 내 기억으로 되돌린다.
      상대는 내 예약 효과를 발동시키지 않고(주인 검사가 있다), 엔진이 읽는 flags 는
-     P1b·R3a·Q1aReady 뿐이라 비밀 증강 쪽을 지워도 상대 계산이 틀어지지 않는다. */
+     P1b·R3a·Q1aReady 뿐이라 비밀 강화 쪽을 지워도 상대 계산이 틀어지지 않는다. */
   let sideCar = { flags: {}, tags: {} };
 
   function hideMine(s) {
@@ -228,7 +228,7 @@
 
     const isMine = (v) => secrets.some(id => v === id || v.indexOf(id) === 0);
 
-    // flags — 내 쪽에서 비밀 증강 이름을 딴 키만 들어낸다
+    // flags — 내 쪽에서 비밀 강화 이름을 딴 키만 들어낸다
     const mineFlags = {};
     for (const k of Object.keys(s.flags[Net.side] || {})) {
       if (isMine(k)) { sideCar.flags[k] = s.flags[Net.side][k]; continue; }
@@ -266,7 +266,7 @@
     const out = new Array(64);
     for (let i = 0; i < 64; i++) {
       const p = bd[i];
-      out[i] = p ? [p.id, p.type, p.color, p.moved ? 1 : 0, p.augLost ? 1 : 0] : 0;
+      out[i] = p ? [p.id, p.type, p.color, p.moved ? 1 : 0, p.upgLost ? 1 : 0] : 0;
     }
     return out;
   }
@@ -276,7 +276,7 @@
     for (let i = 0; i < 64; i++) {
       const c = arr[i];
       if (!c) continue;
-      bd[i] = { id: c[0], type: c[1], color: c[2], moved: !!c[3], augLost: !!c[4] };
+      bd[i] = { id: c[0], type: c[1], color: c[2], moved: !!c[3], upgLost: !!c[4] };
     }
     return bd;
   }
@@ -288,9 +288,9 @@
   Net.serialize = function (snapAdd) {
     const G = Game().G;
     const masks = {};
-    const augs = {
-      w: Net.side === 'w' ? maskMine(G.augs.w, masks) : G.augs.w.slice(),
-      b: Net.side === 'b' ? maskMine(G.augs.b, masks) : G.augs.b.slice(),
+    const upgs = {
+      w: Net.side === 'w' ? maskMine(G.upgs.w, masks) : G.upgs.w.slice(),
+      b: Net.side === 'b' ? maskMine(G.upgs.b, masks) : G.upgs.b.slice(),
     };
     // revealed 는 공개된 것만 담기므로 가릴 게 없다
     return hideMine({
@@ -298,7 +298,7 @@
       bd: packBoard(G.bd),
       turn: G.turn, ply: G.ply, ep: G.ep, moveNo: G.moveNo, begunPly: G.begunPly,
       kills: G.kills, tierIdx: G.tierIdx,
-      augs, masks,
+      upgs, masks,
       eff: G.eff, phased: G.phased, grave: G.grave,
       flags: G.flags, revealed: G.revealed,
       hist: G.hist, lastBySide: G.lastBySide,
@@ -332,9 +332,9 @@
     G.log = s.log || [];
 
     // 내 쪽 목록에 내 가면이 섞여 돌아온다. 내 map 으로만 벗길 수 있다.
-    G.augs = {
-      w: Net.side === 'w' ? unmaskMine(s.augs.w) : s.augs.w.slice(),
-      b: Net.side === 'b' ? unmaskMine(s.augs.b) : s.augs.b.slice(),
+    G.upgs = {
+      w: Net.side === 'w' ? unmaskMine(s.upgs.w) : s.upgs.w.slice(),
+      b: Net.side === 'b' ? unmaskMine(s.upgs.b) : s.upgs.b.slice(),
     };
 
     // 상대가 만든 기물·효과 id 와 부딪히지 않게 내 카운터를 밀어 올린다
@@ -348,7 +348,7 @@
 
     if (s.snapAdd) Game().recordSnapshot(s.snapAdd.side, s.snapAdd.from, s.snapAdd.to);
 
-    // 이번에 새로 공개된 비밀 증강을 알린다
+    // 이번에 새로 공개된 비밀 강화를 알린다
     const now = Object.keys(G.revealed);
     return now.filter(id => prevRevealed.indexOf(id) < 0);
   };

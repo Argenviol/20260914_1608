@@ -2,9 +2,9 @@
    무제체스 - AI
 
    구조
-     · 오프닝 북      정석 46줄. 증강이 하나도 없는 초반에만 사용
+     · 오프닝 북      정석 46줄. 강화가 하나도 없는 초반에만 사용
      · 평가 함수      재료 + 위치(개막/종반 보간) + 킹 안전 + 폰 구조 +
-                     기동성 + 중앙 + 전개 + 증강 진행도
+                     기동성 + 중앙 + 전개 + 강화 진행도
      · 탐색          반복심화 + 알파베타 + 정지탐색(교환 정리) +
                      MVV-LVA / 킬러 / 히스토리 정렬 + 전치표
      · 난이도        시간 예산으로 조절. 어려움은 갈 수 있는 만큼 깊게 본다
@@ -209,8 +209,8 @@
   })();
 
   function bookMove(G, side) {
-    // 증강이 하나라도 개입한 판은 정석이 의미 없다
-    if (G.augs.w.length || G.augs.b.length) return null;
+    // 강화가 하나라도 개입한 판은 정석이 의미 없다
+    if (G.upgs.w.length || G.upgs.b.length) return null;
     if (!G.hist || G.hist.length > 12) return null;
     const cands = BOOK.get(G.hist.join(' '));
     if (!cands || !cands.length) return null;
@@ -241,7 +241,7 @@
   const IS_C4 = new Uint8Array(64), IS_C12 = new Uint8Array(64);
   CENTER4.forEach(i => IS_C4[i] = 1); CENTER12.forEach(i => IS_C12[i] = 1);
 
-  // 가벼운 기동성 (증강 무시, 기하학적 근사)
+  // 가벼운 기동성 (강화 무시, 기하학적 근사)
   function slideCount(G, i, dirs) {
     const [r0, c0] = E.rc(i);
     let n = 0;
@@ -408,15 +408,15 @@
     return taper + extra;
   }
 
-  // 무제체스 고유 항목: 증강 진행도
-  function augScore(G, side) {
+  // 무제체스 고유 항목: 강화 진행도
+  function upgScore(G, side) {
     let s = 0;
     const thr = global.Game.nextThreshold(G, side);
     if (thr !== null) {
       const gap = Math.max(0, thr - G.kills[side]);
       s += Math.max(0, 45 - gap * 12);
     }
-    s += G.augs[side].length * 55;
+    s += G.upgs[side].length * 55;
     return s;
   }
 
@@ -425,7 +425,7 @@
     const ph = S.ph;                       // scan 이 같은 순회에서 이미 더해 뒀다
     const foe = E.other(side);
     return (sideScore(G, side, ph, S) - sideScore(G, foe, ph, S))
-      + (augScore(G, side) - augScore(G, foe));
+      + (upgScore(G, side) - upgScore(G, foe));
   }
 
   /* ═══════════ 탐색 ═══════════ */
@@ -515,7 +515,7 @@
     orderMoves(G, caps, null, 0);
     for (const m of caps) {
       // 델타 가지치기 — 잡는 기물 값을 통째로 얹어도 알파에 못 미치면 볼 필요가 없다.
-      // (증강으로 판이 뒤집히는 국면이 있어 여유를 넉넉히 둔다)
+      // (강화로 판이 뒤집히는 국면이 있어 여유를 넉넉히 둔다)
       const vic = G.bd[m.to];
       if (vic && !m.promo && stand + MG[vic.type] + 200 < alpha) continue;
       const u = E.applyRaw(G, m);
@@ -748,8 +748,8 @@
     return best;
   }
 
-  /* ═══════════ 증강 드래프트 ═══════════ */
-  const AUG_BIAS = {
+  /* ═══════════ 강화 드래프트 ═══════════ */
+  const UPG_BIAS = {
     R1b: 40, N1c: 35, Q11a: 45, Q1c: 30, N11c: 30, B6c: 25, Q11b: 30, K11c: 25,
     K1c: 45, K1b: 35, K3a: 30, K3c: 35, K6b: 25, K6c: 15,
     P11a: 35, N11b: 40, Q6b: 30, R11a: 25, R1a: 20, P6b: 25, R3c: 25, Q11c: 20,
@@ -757,7 +757,7 @@
   };
 
   function draftScore(G, side, a) {
-    let s = 50 + (AUG_BIAS[a.id] || 0);
+    let s = 50 + (UPG_BIAS[a.id] || 0);
     const t = E.KO2T[a.piece];
     if (t && t !== 'k') {
       const n = E.piecesOf(G, side, t).length;

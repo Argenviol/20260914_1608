@@ -33,11 +33,11 @@
   let reviewIdx = -1;                 // 그 국면이 몇 번째인가 (같은 줄을 다시 누르면 나간다)
   let pathHint = null;                // {steps:[], to} — 도약 경로 표시
   let peek = null;                    // {from, dests} — 둘 수는 없고 '어디로 갈 수 있나'만 보는 중
-  let draftingSide = null;            // 증강을 고르는 중인 진영 ('w'|'b'), 아니면 null
+  let draftingSide = null;            // 강화를 고르는 중인 진영 ('w'|'b'), 아니면 null
   let premove = null;                 // {from, to, type} — 상대 차례에 미리 예약해 둔 내 수
   let pmFrom = -1, pmDests = [];      // 예약할 기물을 고르는 중 (출발 칸 · 갈 수 있는 칸)
   let pmTimer = null;
-  let oppDraft = null;                // {left, limit, at, piece, tier} — 상대가 증강을 고르는 중 (온라인)
+  let oppDraft = null;                // {left, limit, at, piece, tier} — 상대가 강화를 고르는 중 (온라인)
   let chatLog = [];                   // [{who:'me'|'you', text, emote, at}]
   let chatUnread = 0;
   let pathTimer = null;
@@ -45,7 +45,7 @@
   let prev = { kills: { w: 0, b: 0 }, ply: -1, result: null, check: false };
 
   /* ───────── 용어 강조 ─────────
-     증강 문구 안의 용어와 아래 #태그를 같은 색으로 칠한다. */
+     강화 문구 안의 용어와 아래 #태그를 같은 색으로 칠한다. */
   function escapeHTML(t) {
     return t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
@@ -95,8 +95,8 @@
   }
 
   /* 용어를 누르면 뜻을 띄운다.
-     증강을 고르는 화면에서는 용어가 '카드' 버튼 안에 들어 있다. 그냥 두면 뜻을 보려다
-     그 증강이 골라져 버린다. 그래서 캡처 단계에서 먼저 잡고 클릭을 거기서 끊는다. */
+     강화를 고르는 화면에서는 용어가 '카드' 버튼 안에 들어 있다. 그냥 두면 뜻을 보려다
+     그 강화가 골라져 버린다. 그래서 캡처 단계에서 먼저 잡고 클릭을 거기서 끊는다. */
   let termPop = null;
 
   function closeTermPop() {
@@ -141,7 +141,7 @@
         return;
       }
       ev.preventDefault();
-      ev.stopPropagation();              // 증강 카드가 골라지지 않게
+      ev.stopPropagation();              // 강화 카드가 골라지지 않게
       showTermPop(t.dataset.term, t);
       SFX().pick();
     }, true);
@@ -371,7 +371,7 @@
   /* 도약(나이트)처럼 '어떻게 간 건지' 가 안 보이는 수만 경로를 그린다.
      미끄러지는 기물은 사이 칸이 뻔하므로 그리지 않는다. */
   /* 보통 체스대로 움직인 수까지 경로를 그리면 오히려 어수선하다.
-     증강 때문에 '평소와 다르게' 간 수만 그린다. */
+     강화 때문에 '평소와 다르게' 간 수만 그린다. */
   function isNormalMove(type, from, to) {
     const [r0, c0] = E.rc(from), [r1, c1] = E.rc(to);
     const dr = Math.abs(r1 - r0), dc = Math.abs(c1 - c0);
@@ -668,7 +668,7 @@
     return { title: sideName(side) + ' 플레이어', kind: 'human' };
   }
 
-  // 한 줄짜리 진영 바: 이름 · 처치 진행 · 증강 수 · 시계
+  // 한 줄짜리 진영 바: 이름 · 처치 진행 · 강화 수 · 시계
   function renderStrip(side, container) {
     const g = G(), gm = Game();
     container.innerHTML = '';
@@ -744,7 +744,7 @@
     renderStrip(bottom, $('#mystrip'));
   }
 
-  /* 마지막 수와 증강 수 — 예전에는 진영 스트립 안에서 처치 눈금과 한 줄을 다퉜다.
+  /* 마지막 수와 강화 수 — 예전에는 진영 스트립 안에서 처치 눈금과 한 줄을 다퉜다.
      스트립 너비는 판에 딸려 있어서 좁아지면 눈금 '11' 글자 위로 겹쳤다.
      판 옆(탭 위)으로 빼서 두 진영을 나란히 놓는다. 처치 눈금만 스트립에 남는다. */
   function lastMoveRow(side) {
@@ -771,10 +771,10 @@
       row.appendChild(el('span', 'striplast none', '아직 안 둠'));
     }
 
-    const n = g.augs[side].length;
-    const ac = el('button', 'stripaug' + (n ? '' : ' none'), '증강 ' + n);
-    ac.title = '증강 탭 열기';
-    ac.onclick = () => { setTab('aug'); SFX().pick(); };
+    const n = g.upgs[side].length;
+    const ac = el('button', 'stripupg' + (n ? '' : ' none'), '강화 ' + n);
+    ac.title = '강화 탭 열기';
+    ac.onclick = () => { setTab('upg'); SFX().pick(); };
     row.appendChild(ac);
 
     return row;
@@ -810,14 +810,14 @@
     if (who.kind === 'ai') msg = sideName(g.turn) + ' 차례 — AI가 생각하고 있습니다';
     else if (who.kind === 'me') msg = sideName(g.turn) + ' 차례 — 당신이 둘 차례입니다';
     else if (gm.mode === 'online') {
-      /* '증강을 고르는 중' 은 상대가 실제로 드래프트 신호를 보냈을 때만.
+      /* '강화를 고르는 중' 은 상대가 실제로 드래프트 신호를 보냈을 때만.
          예전에는 시계가 멈추기만 하면 그렇게 적어서, 상대가 도감을 열어도 그 말이 떴다. */
       msg = sideName(g.turn) + ' 차례 — '
-        + (oppDraft ? '상대가 증강을 고르는 중입니다'
+        + (oppDraft ? '상대가 강화를 고르는 중입니다'
           : gm.clockPaused ? '상대가 대상을 지정하는 중입니다' : '상대가 두는 중입니다');
     }
     else msg = sideName(g.turn) + ' 차례 — ' + sideName(g.turn) + ' 플레이어가 두세요';
-    if (draftingSide) msg = sideName(draftingSide) + ' — 증강을 고르는 중입니다';
+    if (draftingSide) msg = sideName(draftingSide) + ' — 강화를 고르는 중입니다';
     const tt = el('span', 'turntext', msg);
     tt.title = msg;                       // 좁아서 말줄임될 때 원문을 볼 수 있게
     t.appendChild(tt);
@@ -845,16 +845,16 @@
     }
   }
 
-  /* ───────── 사용 가능 증강 ───────── */
+  /* ───────── 사용 가능 강화 ───────── */
   function renderActions() {
     const g = G(), box = $('#actions');
     box.innerHTML = '';
-    // 온라인에서는 내 차례에 내 것만. 상대 차례에 상대 증강 버튼이 떠서 눌러도 안 되던 것.
+    // 온라인에서는 내 차례에 내 것만. 상대 차례에 상대 강화 버튼이 떠서 눌러도 안 되던 것.
     if (g.result || !Game().isHuman(g.turn) || !Game().myTurn()) return;
     const ids = Game().activatable(g.turn);
     if (!ids.length) return;
     for (const id of ids) {
-      const a = global.AUG_BY_ID[id];
+      const a = global.UPG_BY_ID[id];
       const b = el('button', 'act');
       b.innerHTML = '<b>' + a.piece + ' ' + id + ' 사용</b>' +
         '<span>' + termHTML(a.text, a.terms) + '</span>';
@@ -864,7 +864,7 @@
   }
 
   /* ═══════════════════ 오른쪽 탭 패널 ═══════════════════ */
-  let tab = 'aug';                    // aug | eff | log
+  let tab = 'upg';                    // upg | eff | log
 
   function setTab(t) {
     tab = t;
@@ -874,33 +874,33 @@
     renderTabPanel();
   }
 
-  function augCard(id, dimSecret, side) {
+  function upgCard(id, dimSecret, side) {
     const g = G();
-    const a = global.AUG_BY_ID[id];
+    const a = global.UPG_BY_ID[id];
     // 모르는 id (가면 해독 실패 등) 로 화면 전체가 멈추지는 않게 한다
     if (!a) {
-      // 비밀 증강이 아니라 '해독에 실패한' 것이다. 비밀이라고 부르면 없는 정보를 지어내는 셈이다.
-      const u = el('div', 'aug hidden');
-      u.textContent = '표시할 수 없는 증강 (새로고침하면 돌아옵니다)';
+      // 비밀 강화가 아니라 '해독에 실패한' 것이다. 비밀이라고 부르면 없는 정보를 지어내는 셈이다.
+      const u = el('div', 'upg hidden');
+      u.textContent = '표시할 수 없는 강화 (새로고침하면 돌아옵니다)';
       return u;
     }
     const hidden = a.secret && !g.revealed[id] && dimSecret;
-    const c = el('div', 'aug' + (hidden ? ' hidden' : ''));
+    const c = el('div', 'upg' + (hidden ? ' hidden' : ''));
     if (hidden) {
       c.innerHTML = '<span class="tag secret">비밀</span> <b>' + a.piece + ' ' + a.tier +
         '개</b> — 발동 전까지 비공개';
     } else {
       c.classList.add(durOf(a.tag).cls);
       c.innerHTML = '<span class="tag t' + a.tier + '">' + a.tier + '</span>' +
-        '<b>' + a.piece + '</b><span class="augid">' + id + '</span>' +
+        '<b>' + a.piece + '</b><span class="upgid">' + id + '</span>' +
         (a.secret ? '<span class="tag secret">◆ 비밀</span>' : '') +
-        '<div class="augtext">' + termHTML(a.text, a.terms) + '</div>';
+        '<div class="upgtext">' + termHTML(a.text, a.terms) + '</div>';
       c.insertBefore(durChip(a.tag), c.firstChild);
       // 교환은 '누구와 바뀌었나' 를 알아야 뜻이 통한다
-      const note = side && Game().augNotes && Game().augNotes[side][id];
+      const note = side && Game().upgNotes && Game().upgNotes[side][id];
       if (note) {
-        const n = el('div', 'augnote');
-        n.appendChild(el('span', 'augnotelabel', '교환'));
+        const n = el('div', 'upgnote');
+        n.appendChild(el('span', 'upgnotelabel', '교환'));
         n.appendChild(el('span', null, note));
         c.appendChild(n);
       }
@@ -908,13 +908,13 @@
          판정 전에는 지금 합과 조건 충족 여부를, 판정 뒤에는 결과를 적는다. */
       if ((id === 'B3a' || id === 'B3b') && side && global.parityStatus) {
         const st = global.parityStatus(g, side, id);
-        const n = el('div', 'augnote');
+        const n = el('div', 'upgnote');
         if (st.done) {
-          n.appendChild(el('span', 'augnotelabel', '판정 끝'));
+          n.appendChild(el('span', 'upgnotelabel', '판정 끝'));
           n.appendChild(el('span', null, st.done === 'fired' ? '폰을 소환했습니다' : '조건이 맞지 않아 소환하지 않았습니다'));
           c.classList.add('spent');
         } else {
-          n.appendChild(el('span', 'augnotelabel', '지금'));
+          n.appendChild(el('span', 'upgnotelabel', '지금'));
           n.appendChild(el('span', null,
             `아군 점수 합 ${st.sum} (${st.odd ? '홀수' : '짝수'}) → ${st.ok ? '조건 충족 ✓' : '조건 불일치 ✕'} · 다음 내 차례에 판정`));
         }
@@ -997,20 +997,20 @@
     syncChatTab();
     if (tab === 'chat') { renderChat(box); return; }
 
-    if (tab === 'aug') {
+    if (tab === 'upg') {
       const bottom = bottomSide();
       for (const side of [bottom, E.other(bottom)]) {
         const who = whoIs(side);
         const head = el('div', 'panelhead');
         head.appendChild(el('span', 'dot ' + (side === 'w' ? 'dw' : 'db')));
         head.appendChild(el('b', null, sideName(side) + ' · ' + who.title));
-        head.appendChild(el('span', 'panelcount', String(g.augs[side].length)));
+        head.appendChild(el('span', 'panelcount', String(g.upgs[side].length)));
         box.appendChild(head);
 
-        const list = el('div', 'auglist');
+        const list = el('div', 'upglist');
         const dimSecret = gm.mode === 'ai' && side === gm.aiSide;
-        for (const id of g.augs[side]) list.appendChild(augCard(id, dimSecret, side));
-        if (!g.augs[side].length) list.appendChild(el('div', 'dim', '아직 없음'));
+        for (const id of g.upgs[side]) list.appendChild(upgCard(id, dimSecret, side));
+        if (!g.upgs[side].length) list.appendChild(el('div', 'dim', '아직 없음'));
         box.appendChild(list);
 
         const thr = gm.nextThreshold(g, side);
@@ -1021,7 +1021,7 @@
         box.appendChild(tiers);
         if (thr !== null) {
           box.appendChild(el('div', 'panelnote',
-            '다음 증강까지 ' + Math.max(0, thr - g.kills[side]) + '처치'));
+            '다음 강화까지 ' + Math.max(0, thr - g.kills[side]) + '처치'));
         }
       }
       return;
@@ -1062,7 +1062,7 @@
     let seenSnap = false;
     for (const x of items) {
       const line = el('div', 'line', x.text);
-      // 마지막 스냅샷 뒤에 붙은 줄(방금 발동한 증강 등)은 지금 판이 곧 그때 판이다
+      // 마지막 스냅샷 뒤에 붙은 줄(방금 발동한 강화 등)은 지금 판이 곧 그때 판이다
       const s = x.snap !== undefined ? x.snap : (seenSnap ? g.snaps.length - 1 : undefined);
       if (s !== undefined && g.snaps[s]) {
         seenSnap = true;
@@ -1073,9 +1073,9 @@
         if (review && g.snaps[s] === review) line.classList.add('viewing');
       }
       // '처치 카운트 1·3·6·11' 같은 안내문까지 처치로 칠하지 않도록 실제 이벤트만 고른다
-      if (x.text.indexOf('⚡') === 0) line.classList.add('aug');
+      if (x.text.indexOf('⚡') === 0) line.classList.add('upg');
       else if (x.text.indexOf('처치 (누적') >= 0) line.classList.add('cap');
-      else if (x.text.indexOf('증강 획득') >= 0) line.classList.add('gain');
+      else if (x.text.indexOf('강화 획득') >= 0) line.classList.add('gain');
       else if (x.text === '체크!') line.classList.add('chk');
       wrap.appendChild(line);
     }
@@ -1177,7 +1177,7 @@
     document.body.appendChild(ov);
     /* keepClock: 도감·규칙·계정 창처럼 게임 진행과 무관한 창. 시계를 멈추지 않는다.
        예전에는 모든 창이 시계를 멈춰서, 상대 차례에 도감을 열어 두면 상대 시간이
-       공짜로 서고 내 화면에는 '증강을 고르는 중' 이라고 떴다. */
+       공짜로 서고 내 화면에는 '강화를 고르는 중' 이라고 떴다. */
     const pauses = !(opts && opts.keepClock);
     if (pauses) { pauseDepth++; Game().pauseClock(); }
     let closed = false;
@@ -1252,7 +1252,7 @@
     });
   }
 
-  // 원본 엑셀 증강표의 '한 칸' 을 그대로 펼친다: 같은 기물 · 같은 티어의 선택지 3개, 하나만 고름.
+  // 원본 엑셀 강화표의 '한 칸' 을 그대로 펼친다: 같은 기물 · 같은 티어의 선택지 3개, 하나만 고름.
   function draft({ side, tier, piece, offer, round, rounds, byKo }) {
     return new Promise(async (res) => {
       /* 처치한 판을 먼저 눈으로 확인하고 나서 고르게 한다.
@@ -1266,7 +1266,7 @@
       const wrap = el('div', 'draft');
 
       const head = el('div', 'drafthead');
-      const h = el('h2', null, `${piece} 증강`);
+      const h = el('h2', null, `${piece} 강화`);
       head.appendChild(h);
       const meta = el('div', 'draftmeta');
       meta.appendChild(el('span', 'dpill', `${tier}개 처치`));
@@ -1277,14 +1277,14 @@
       wrap.appendChild(head);
       const guide = el('div', 'sub');
       guide.appendChild(document.createTextNode(rounds > 1
-        ? `이 칸의 선택지 중 ${rounds}개를 고릅니다 \u2014 지금은 ${round}번째. 지금 발동할 수 없는 증강은 고를 수 없습니다.  `
-        : '하나만 고를 수 있습니다. 지금 발동할 수 없는 증강은 고를 수 없습니다.  '));
+        ? `이 칸의 선택지 중 ${rounds}개를 고릅니다 \u2014 지금은 ${round}번째. 지금 발동할 수 없는 강화는 고를 수 없습니다.  `
+        : '하나만 고를 수 있습니다. 지금 발동할 수 없는 강화는 고를 수 없습니다.  '));
       guide.appendChild(durLegend());
       wrap.appendChild(guide);
 
       const cards = el('div', 'cards');
       for (const o of offer) {
-        const a = o.aug;
+        const a = o.upg;
         const c = el('button', 'card ' + durOf(a.tag).cls + (o.block ? ' blocked' : ''));
         const top = el('div', 'cardtop');
         top.appendChild(el('span', 'cardid', a.id));
@@ -1302,7 +1302,7 @@
           c.disabled = true;
           c.onclick = () => SFX().deny();
         } else {
-          c.onclick = () => { SFX().augment(); finish(a.id); };
+          c.onclick = () => { SFX().upgrade(); finish(a.id); };
         }
         cards.appendChild(c);
       }
@@ -1333,8 +1333,8 @@
       function onTimeUp() {
         if (done || !pickable.length) { stopTimer(); return; }
         const r = pickable[(Math.random() * pickable.length) | 0];
-        toast('시간이 다 되어 무작위로 골랐습니다 — ' + r.aug.id);
-        finish(r.aug.id, true);
+        toast('시간이 다 되어 무작위로 골랐습니다 — ' + r.upg.id);
+        finish(r.upg.id, true);
       }
 
       /* 온라인이면 상대 화면에도 '고르는 중 · 남은 시간' 을 띄운다.
@@ -1360,9 +1360,9 @@
       const backBar = el('div', 'peekbar');
       const bmsg = el('div', 'peekmsg');
       bmsg.appendChild(el('b', null, '판을 보는 중입니다'));
-      bmsg.appendChild(el('span', 'peeksub', '증강은 아직 고르지 않았습니다'));
+      bmsg.appendChild(el('span', 'peeksub', '강화는 아직 고르지 않았습니다'));
       backBar.appendChild(bmsg);
-      const back = el('button', 'skipbtn big', '증강 고르기로 →');
+      const back = el('button', 'skipbtn big', '강화 고르기로 →');
       backBar.appendChild(back);
       document.body.appendChild(backBar);
 
@@ -1403,23 +1403,23 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
-  /* ───────── 증강 발동 표시 ───────── */
-  function flash(squares, augId, side, quiet) {
+  /* ───────── 강화 발동 표시 ───────── */
+  function flash(squares, upgId, side, quiet) {
     for (const s of squares) flashSquares.add(s);
     renderBoard();
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => { flashSquares.clear(); renderBoard(); }, 1500);
     if (quiet) return;
-    SFX().augment();
-    const a = augId && global.AUG_BY_ID[augId];
-    const label = a ? `${a.piece} ${augId}` : augId;
+    SFX().upgrade();
+    const a = upgId && global.UPG_BY_ID[upgId];
+    const label = a ? `${a.piece} ${upgId}` : upgId;
     const who = side ? `${sideName(side)}의 ` : '';
     banner(`⚡ ${who}${label} 발동`, a ? a.text : '', 'fx', 2600);
     G().log.push({ t: 'text', text: `⚡ ${who}${label} 발동 — ${squares.map(E.sqName).join(' ')}` });
     renderLog();
   }
 
-  // 증강 획득은 놓치면 안 되는 정보라 화면 한가운데에 크게 띄운다.
+  // 강화 획득은 놓치면 안 되는 정보라 화면 한가운데에 크게 띄운다.
   const centerQueue = [];
   let centerBusy = false;
 
@@ -1452,7 +1452,7 @@
   }
 
   function announce(side, id, kind) {
-    const a = global.AUG_BY_ID[id];
+    const a = global.UPG_BY_ID[id];
     const gm = Game();
     const isOpp = gm.mode === 'ai' ? side === gm.aiSide : gm.mode === 'online' ? side !== gm.mySide : false;
     const who = gm.mode === 'ai' ? (isOpp ? 'AI' : '내')
@@ -1461,35 +1461,35 @@
 
     if (kind === 'secret') {
       centerCard({
-        title: `${who} 비밀 증강 획득`,
+        title: `${who} 비밀 강화 획득`,
         sub: `${a.piece} · ${a.tier}개 티어`,
         body: '발동하기 전까지는 내용이 공개되지 않습니다.',
         cls: isOpp ? 'enemy' : 'mine', ms: 2000,
       });
-      if (isOpp) SFX().enemyAugment(); else SFX().augment();
+      if (isOpp) SFX().enemyUpgrade(); else SFX().upgrade();
       return;
     }
     if (kind === 'reveal') {
-      // 내 비밀 증강이 발동한 건 발동 배너·판 효과·(B3a 같은) 판정 카드로 이미 보인다. 상대에게만 새 소식이다.
-      if ((gm.mode === 'online' || gm.mode === 'ai') && !isOpp) { SFX().augment(); return; }
+      // 내 비밀 강화가 발동한 건 발동 배너·판 효과·(B3a 같은) 판정 카드로 이미 보인다. 상대에게만 새 소식이다.
+      if ((gm.mode === 'online' || gm.mode === 'ai') && !isOpp) { SFX().upgrade(); return; }
       centerCard({
-        title: `${who} 비밀 증강이 공개되었습니다`,
+        title: `${who} 비밀 강화가 공개되었습니다`,
         sub: `${a.piece} ${a.id}`, body: a.text, terms: a.terms,
         cls: 'reveal', ms: 3000,
       });
-      SFX().enemyAugment();
+      SFX().enemyUpgrade();
       return;
     }
     centerCard({
-      title: `${who} 증강 획득`,
+      title: `${who} 강화 획득`,
       sub: `${a.piece} · ${a.tier}개 티어 · ${a.id}`,
       body: a.text, terms: a.terms,
       cls: isOpp ? 'enemy' : 'mine', ms: 2600,
     });
-    if (isOpp) SFX().enemyAugment(); else SFX().augment();
+    if (isOpp) SFX().enemyUpgrade(); else SFX().upgrade();
   }
 
-  /* 상대 화면에서 돌아간 증강이 내 판을 바꿨을 때. 예전에는 기물이 소리 없이 사라졌다.
+  /* 상대 화면에서 돌아간 강화가 내 판을 바꿨을 때. 예전에는 기물이 소리 없이 사라졌다.
      바뀐 칸을 빛내고, 상대 화면에만 떴던 발동 줄을 배너로 보여 준다. */
   function remoteFx(squares, lines) {
     if (squares && squares.length) {
@@ -1499,19 +1499,19 @@
       flashTimer = setTimeout(() => { flashSquares.clear(); renderBoard(); }, 1800);
     }
     if (lines && lines.length) {
-      SFX().enemyAugment();
+      SFX().enemyUpgrade();
       for (const t of lines.slice(-3)) {
         const m = t.match(/^⚡ \[([A-Z]\d+[a-z])\] (.*?) 발동 — (.*)$/);
         if (m) banner(`⚡ 상대의 ${m[2]} ${m[1]} 발동`, m[3], 'enemy', 3400);
         else banner(t, '', 'enemy', 3000);
       }
     } else if (squares && squares.length) {
-      SFX().enemyAugment();
-      banner('⚡ 상대의 증강으로 판이 바뀌었습니다', squares.map(E.sqName).join(' '), 'enemy', 2600);
+      SFX().enemyUpgrade();
+      banner('⚡ 상대의 강화로 판이 바뀌었습니다', squares.map(E.sqName).join(' '), 'enemy', 2600);
     }
   }
 
-  /* 상대가 증강을 고르는 중 (온라인) — 판 가운데 안내와 오른쪽 남은 시간.
+  /* 상대가 강화를 고르는 중 (온라인) — 판 가운데 안내와 오른쪽 남은 시간.
      상대 화면의 30초 타이머와 같은 값을 보여 준다. */
   function renderOppDraft() {
     const mid = $('#oppdraft'), bar = $('#oppdrafttimer');
@@ -1521,15 +1521,15 @@
     if (!on) return;
     if (!mid.firstChild) {
       const c = el('div', 'oppdraftcard');
-      c.appendChild(el('div', 'odtitle', '상대가 증강을 고르는 중입니다'));
+      c.appendChild(el('div', 'odtitle', '상대가 강화를 고르는 중입니다'));
       c.appendChild(el('div', 'odsub', ''));
       c.appendChild(el('div', 'odtime', ''));
       mid.appendChild(c);
-      bar.appendChild(el('span', 'odlabel', '상대 증강 선택'));
+      bar.appendChild(el('span', 'odlabel', '상대 강화 선택'));
       const tb = el('div', 'dtbar'); tb.appendChild(el('div', 'dtfill')); bar.appendChild(tb);
       bar.appendChild(el('span', 'dtnum', ''));
     }
-    mid.querySelector('.odsub').textContent = oppDraft.piece ? `${oppDraft.piece} · ${oppDraft.tier}개 티어 증강 중 하나` : '';
+    mid.querySelector('.odsub').textContent = oppDraft.piece ? `${oppDraft.piece} · ${oppDraft.tier}개 티어 강화 중 하나` : '';
     tickOppDraft();
   }
   function tickOppDraft() {
@@ -1590,7 +1590,7 @@
       difficulty: gm.mode === 'ai' ? gm.difficulty : null,
       outcome, reason: result.reason, moves: g.moveNo,
       kills: { w: g.kills.w, b: g.kills.b },
-      augs: { w: g.augs.w.length, b: g.augs.b.length },
+      augs: { w: g.upgs.w.length, b: g.upgs.b.length },   // 키는 이미 저장된 전적(브라우저·서버)과 같아야 해서 그대로 둔다
     });
     if (typeof renderHomeRecords === 'function') renderHomeRecords();
 
@@ -1678,7 +1678,7 @@
       row.innerHTML = `<span class="rres">${label}</span>` +
         `<span class="rmode">${r.mode === 'ai' ? 'AI ' + (global.AI.LEVELS[r.difficulty] || {}).label : r.mode === 'online' ? '온라인' : '2인'}</span>` +
         `<span class="rwhy">${r.reason}</span>` +
-        `<span class="rwhen">${mm} · ${r.moves}수 · 증강 ${r.augs.w + r.augs.b}</span>`;
+        `<span class="rwhen">${mm} · ${r.moves}수 · 강화 ${r.augs.w + r.augs.b}</span>`;
       list.appendChild(row);
     }
     box.appendChild(list);
@@ -1788,7 +1788,7 @@
     return box;
   }
 
-  // 증강 한 장 (도감용). 드래프트 카드와 같은 색·같은 배치로 보여 준다.
+  // 강화 한 장 (도감용). 드래프트 카드와 같은 색·같은 배치로 보여 준다.
   function codexCard(a) {
     const c = el('div', 'ccard ' + durOf(a.tag).cls);
     const top = el('div', 'cardtop');
@@ -1810,8 +1810,8 @@
 
     const head = el('div', 'codexhead');
     const h = el('div');
-    h.appendChild(el('h2', null, `증강 도감 \u00B7 ${global.AUGMENTS.length}종`));
-    h.appendChild(el('div', 'sub', '원본 증강표와 같은 배치입니다. 칸(기물 \u00D7 처치 수)마다 선택지가 3개이고, ' +
+    h.appendChild(el('h2', null, `강화 도감 \u00B7 ${global.UPGRADES.length}종`));
+    h.appendChild(el('div', 'sub', '원본 강화표와 같은 배치입니다. 칸(기물 \u00D7 처치 수)마다 선택지가 3개이고, ' +
       '게임에서는 그 칸 하나를 그대로 펼쳐 1개만 고릅니다.'));
     head.appendChild(h);
     head.appendChild(durLegend());
@@ -1860,7 +1860,7 @@
       for (const p of pieces) {
         const rows = [];
         for (const t of tiers) {
-          const list = global.AUGMENTS.filter(a => a.piece === p && a.tier === t && match(a));
+          const list = global.UPGRADES.filter(a => a.piece === p && a.tier === t && match(a));
           if (list.length) rows.push({ t, list });
         }
         if (!rows.length) continue;
@@ -1874,7 +1874,7 @@
            가장 많은 칸 수만큼 행을 만들어 두고 티어 칼럼이 그 행을 그대로 쓰게 한다(subgrid).
            행은 auto 다 — 같은 줄끼리만 높이를 맞추고, 문구가 짧은 카드까지
            가장 긴 카드 높이로 늘리지는 않는다. 예전에는 1fr 이라 카드마다 빈칸이 크게 남아
-           한 기물 12장이 한 화면에 안 들어왔다 (피드백 '증강 도감 1'). */
+           한 기물 12장이 한 화면에 안 들어왔다 (피드백 '강화 도감 1'). */
         const maxN = rows.reduce((n, r) => Math.max(n, r.list.length), 0);
         cols.style.gridTemplateRows = `auto repeat(${maxN}, auto)`;
         for (const r of rows) {
@@ -1886,7 +1886,7 @@
         sec.appendChild(cols);
         body.appendChild(sec);
       }
-      if (!shown) body.appendChild(el('div', 'dim', '조건에 맞는 증강이 없습니다.'));
+      if (!shown) body.appendChild(el('div', 'dim', '조건에 맞는 강화가 없습니다.'));
     }
 
     drawSegs(); fill();
@@ -1926,14 +1926,14 @@
       body.appendChild(t);
     }
 
-    /* ── 1. 증강을 얻는 흐름 ── */
-    section('증강을 얻는 흐름');
+    /* ── 1. 강화를 얻는 흐름 ── */
+    section('강화를 얻는 흐름');
     const flow = el('div', 'flow');
     [
-      ['\u2694', '처치한다', '상대 기물을 정상적인 수로 잡습니다. 증강으로 <b>제거</b>한 것은 처치로 세지 않습니다.'],
+      ['\u2694', '처치한다', '상대 기물을 정상적인 수로 잡습니다. 강화로 <b>제거</b>한 것은 처치로 세지 않습니다.'],
       ['\u2191', '카운트가 찬다', '누적 처치가 <b>1 \u00B7 3 \u00B7 6 \u00B7 11</b>에 닿는 순간 드래프트가 열립니다.'],
-      ['\u25A6', '그 칸이 펼쳐진다', '<b>처치를 해낸 기물</b>의 칸이 열립니다. 퀸으로 잡았으면 퀸 증강 3개입니다.'],
-      ['\u2714', '하나만 고른다', '지금 발동해도 아무 일이 없는 증강은 \u2715 로 잠깁니다. 이미 가진 증강도 마찬가지입니다.'],
+      ['\u25A6', '그 칸이 펼쳐진다', '<b>처치를 해낸 기물</b>의 칸이 열립니다. 퀸으로 잡았으면 퀸 강화 3개입니다.'],
+      ['\u2714', '하나만 고른다', '지금 발동해도 아무 일이 없는 강화는 \u2715 로 잠깁니다. 이미 가진 강화도 마찬가지입니다.'],
     ].forEach(function (row, i) {
       const c = el('div', 'flowstep');
       c.innerHTML = '<div class="flowno">' + (i + 1) + '</div>' +
@@ -1949,8 +1949,8 @@
     for (const row of [
       ['두는 법', '기물을 클릭하거나 끌어서 놓습니다. 갈 수 있는 칸에 점이 찍힙니다.'],
       ['수 예약', '상대 차례에 내 기물을 끌어 놓아 두면 내 차례가 오는 순간 그 수를 둡니다. 우클릭이나 Esc 로 취소합니다.'],
-      ['제한시간', '다 쓰면 집니다. 한 수를 둘 때마다 증분(예: 5분+3초의 3초)을 돌려받고, 증강을 고르거나 대상을 찍는 동안에는 시계가 멈춥니다.'],
-      ['증강이 발동하면', '바뀐 칸이 금색으로 빛나고, 어떤 증강 때문인지 배너와 진행 기록에 남습니다.'],
+      ['제한시간', '다 쓰면 집니다. 한 수를 둘 때마다 증분(예: 5분+3초의 3초)을 돌려받고, 강화를 고르거나 대상을 찍는 동안에는 시계가 멈춥니다.'],
+      ['강화가 발동하면', '바뀐 칸이 금색으로 빛나고, 어떤 강화 때문인지 배너와 진행 기록에 남습니다.'],
       ['지난 판 보기', '진행 기록에서 착수 줄을 누르면 그때의 판을 그대로 다시 볼 수 있습니다.'],
     ]) {
       const c = el('div', 'rcard');
@@ -1961,7 +1961,7 @@
 
     /* ── 3. 전역 룰 ──
        설계 사유(why)는 기획 문서에만 두고 여기서는 애초에 안 그린다.
-       남은 본문도 증강 ID 가 섞인 예외 설명이라 처음 보는 사람에게는 읽을거리가 아니다.
+       남은 본문도 강화 ID 가 섞인 예외 설명이라 처음 보는 사람에게는 읽을거리가 아니다.
        이름만 먼저 보여 주고 본문은 접어 둔다 — 궁금한 줄만 눌러서 편다 (피드백 '규칙/용어 2'). */
     section('전역 룰');
     body.appendChild(el('div', 'rhint', '이름만 먼저 보여 줍니다. 자세한 예외는 눌러서 펴 보세요.'));
@@ -1976,7 +1976,7 @@
     }
     body.appendChild(rules);
 
-    /* ── 4. 용어 (증강 문구에 칠해지는 색 그대로) ── */
+    /* ── 4. 용어 (강화 문구에 칠해지는 색 그대로) ── */
     section('용어');
     const terms = el('div', 'rgrid');
     for (const g2 of global.GLOSSARY) {
@@ -2041,7 +2041,7 @@
     rematchPending = false;
     if (!resume) { chatLog = []; chatUnread = 0; }
     // 재접속이면 가면 해독표를 되살린다. 새 판이면 지운다.
-    // (여기서 무조건 지우면, 방금 되살린 표를 다시 날려 내 비밀 증강을 나도 못 읽게 된다)
+    // (여기서 무조건 지우면, 방금 되살린 표를 다시 날려 내 비밀 강화를 나도 못 읽게 된다)
     if (resume) global.Net.loadVault(); else global.Net.resetMasks();
     startGame('online', { mySide: side, timeControl: tc || null, pushInitial: !!pushInitial });
   }
@@ -2103,14 +2103,14 @@
           return;
 
         case 'note':
-          // 상대가 증강을 고르거나 대상을 지정하는 동안 이쪽 화면의 시계도 멈춘다
+          // 상대가 강화를 고르거나 대상을 지정하는 동안 이쪽 화면의 시계도 멈춘다
           if (m.kind === 'pause') { Game().clockPaused = true; }
           else if (m.kind === 'resume') {
             if (m.clock && G()) G().clock = m.clock;
             Game().clockPaused = false;
             Game().startClockTurn();
           }
-          // 상대의 증강 선택 — 남은 시간은 0.5초마다 다시 온다
+          // 상대의 강화 선택 — 남은 시간은 0.5초마다 다시 온다
           else if (m.kind === 'draft') {
             const fresh = !oppDraft;
             oppDraft = { left: +m.left || 0, limit: +m.limit || 30000, piece: m.piece, tier: m.tier, at: Date.now() };
@@ -2292,7 +2292,7 @@
     oppDraft = null;
     document.body.classList.remove('reviewing');
     const rb = $('#reviewbar'); if (rb) rb.remove();
-    setTab('aug');
+    setTab('upg');
     SFX().unlock();
     Game().start({ mode, aiSide: 'b', difficulty, timeControl: tc, mySide: opts.mySide || 'w' });
     if (global.Stats) {
@@ -2313,10 +2313,10 @@
     gm.api = {
       pickSquare, pickOption, confirm, draft, flash, announce, remoteFx,
       msg: (t) => { toast(t); G().log.push({ t: 'text', text: t }); renderLog(); },
-      // 증강이 판정·소진되는 순간처럼 놓치면 안 되는 일 — 화면 가운데 카드
+      // 강화가 판정·소진되는 순간처럼 놓치면 안 되는 일 — 화면 가운데 카드
       event: (e) => { centerCard({ title: e.title, sub: e.sub, body: e.body, terms: e.terms, cls: e.cls, ms: e.ms || 2600 }); },
-      reveal: (id) => gm.revealAug(id),
-      grant: (s, id) => gm.grantAug(s, id),
+      reveal: (id) => gm.revealUpg(id),
+      grant: (s, id) => gm.grantUpg(s, id),
     };
     gm.onUpdate = (kind) => {
       sel = -1; dests = []; peek = null;
